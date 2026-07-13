@@ -1,49 +1,22 @@
-{:system/env
+ {:system/env
  #profile {:dev  :dev
            :test :test
            :prod :prod}
- 
- 
- 
- 
+
+ :app/db
+ {:jdbc-url #or [#env DATABASE_URL "jdbc:sqlite:data/pommes-connection.db"]}
+
+ :app/migrations
+ {:datasource    #ig/ref :app/db
+  :migration-dir "migrations"}
+
+ :app/routes
+ {:datasource #ig/ref :app/migrations}
+
+ :app/web
+ {:router #ig/ref :app/routes}
 
  :server/http
  {:port    #long #or [#env PORT 3000]
   :host    #or [#env HTTP_HOST "0.0.0.0"]
-  :handler #ig/ref :handler/ring}
-
- :handler/ring
- {:router                #ig/ref :router/core
-  :api-path              "/api"
-  :cookie-secret         #or [#env COOKIE_SECRET "JKBBYOPVZQMHGNTI"]
-  ;; from ring.middleware.defaults. anti-forgery `false` by default because services may not require it
-  :site-defaults-config  {:params    {:urlencoded true
-                                      :multipart  true
-                                      :nested     true
-                                      :keywordize true}
-                          :cookies   true
-                          :session   {:flash true
-                                      :cookie-name "dev.lhrb.pommes.pommes-connection"
-                                      :cookie-attrs {:max-age     86400
-                                                     :http-only   true
-                                                     :same-site   :strict}}
-                          :security  {:anti-forgery   false
-                                      :xss-protection {:enable? true, :mode :block}
-                                      :frame-options  :sameorigin
-                                      :content-type-options :nosniff}
-                          :static    {:resources "public"}
-                          :responses {:not-modified-responses true
-                                      :absolute-redirects     true
-                                      :content-types          true
-                                      :default-charset        "utf-8"}}}
-
- :reitit.routes/api
- {:base-path "/api"
-  :env       #ig/ref :system/env}
-
- :router/routes
- {:routes #ig/refset :reitit/routes}
-
- :router/core
- {:routes #ig/ref :router/routes
-  :env #ig/ref :system/env} }
+  :handler #ig/ref :app/web}}

@@ -6,8 +6,10 @@
 
 (deftest health-request-test []
   (testing "happy path"
-    (let [handler (:handler/ring (system-state))
+    (let [handler (:app/web (system-state))
           params {}
           headers {}
-          response (GET handler "/api/health" params headers)]
-      (is (= 200 (:status response))))))
+          response (GET handler "/health" params headers)]
+      (is (= 200 (:status response)))
+      (is (re-find #"Server: ready" (:body response)))
+      (is (re-find #"Database: ready" (:body response))))))

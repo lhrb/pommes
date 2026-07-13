@@ -11,7 +11,7 @@
     [integrant.repl.state :as state]
     [kit.api :as kit]
     [lambdaisland.classpath :as licp]
-    [dev.lhrb.pommes.pommes-connection.core :refer [start-app]]))
+    [dev.lhrb.pommes.pommes-connection.system :refer [start-app]]))
 
 (alter-var-root #'s/*explain-out* (constantly expound/printer))
 
@@ -20,13 +20,13 @@
 (defn dev-prep!
   []
   (integrant.repl/set-prep! (fn []
-                              (-> (dev.lhrb.pommes.pommes-connection.config/system-config {:profile :dev})
+                              (-> (dev.lhrb.pommes.pommes-connection.system/system-config {:profile :dev})
                                   (ig/expand)))))
 
 (defn test-prep!
   []
   (integrant.repl/set-prep! (fn []
-                              (-> (dev.lhrb.pommes.pommes-connection.config/system-config {:profile :test})
+                              (-> (dev.lhrb.pommes.pommes-connection.system/system-config {:profile :test})
                                   (ig/expand)))))
 
 ;; Can change this to test-prep! if want to run tests as the test profile in your repl

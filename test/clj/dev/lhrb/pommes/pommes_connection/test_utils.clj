@@ -1,21 +1,21 @@
 (ns dev.lhrb.pommes.pommes-connection.test-utils
   (:require
-    [dev.lhrb.pommes.pommes-connection.core :as core]
+    [dev.lhrb.pommes.pommes-connection.system :as system]
     [peridot.core :as p]
     [byte-streams :as bs]
     [integrant.repl.state :as state]))
 
 (defn system-state
   []
-  (or @core/system state/system))
+  (or @system/system state/system))
 
 (defn system-fixture
   []
   (fn [f]
     (when (nil? (system-state))
-      (core/start-app {:opts {:profile :test}}))
+      (system/start-app {:opts {:profile :test}}))
     (f)
-    (core/stop-app)))
+    (system/stop-app)))
 
 (defn get-response [ctx]
   (-> ctx

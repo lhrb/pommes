@@ -8,7 +8,11 @@ Start the server with:
 (go)
 ```
 
-The default API is available under http://localhost:3000/api
+The health page is available at http://localhost:3000/health. It reports server
+and database readiness.
+
+By default, SQLite stores its database at `data/pommes-connection.db`. Set
+`DATABASE_URL` to use another JDBC URL.
 
 System configuration is available under `resources/system.edn`.
 
