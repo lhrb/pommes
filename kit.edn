@@ -1,0 +1,8 @@
+{:full-name "dev.lhrb.pommes/pommes-connection"
+ :ns-name   "dev.lhrb.pommes.pommes-connection"
+ :sanitized "dev/lhrb/pommes/pommes_connection"
+ :name      "pommes-connection"
+ :modules   {:root         "modules"
+             :repositories [{:url  "https://github.com/kit-clj/modules.git"
+                             :tag  "master"
+                             :name "kit-modules"}]}}
