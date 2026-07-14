@@ -6,7 +6,11 @@
 
 (defmethod ig/init-key :app/db
   [_ {:keys [jdbc-url]}]
-  (jdbc/get-datasource jdbc-url))
+  (let [datasource (jdbc/get-datasource jdbc-url)]
+    ;; SQLite enables foreign keys per connection. Tick and repository
+    ;; transactions enable them again for the connection they use.
+    (jdbc/execute-one! datasource ["PRAGMA foreign_keys = ON"])
+    datasource))
 
 (defmethod ig/init-key :app/migrations
   [_ {:keys [datasource migration-dir]}]
