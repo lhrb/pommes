@@ -53,7 +53,7 @@
   (some #(when (= viewer-id (:player-id %)) %) (:players latest-tick)))
 
 (defn page
-  [{:keys [game viewer players city latest-tick form errors scheduled-for]}]
+  [{:keys [game viewer players city latest-tick form errors scheduled-for anti-forgery-token]}]
   (let [viewer-result (viewer-tick-summary latest-tick (:id viewer))
         dishes (take 3 (concat (or (:dishes form) (:dishes viewer)) (repeat {})))]
     (-> (layout/page
@@ -61,7 +61,10 @@
          [:main
           [:header
            [:h1 (:name game)]
-           [:p (str "Playing as " (:name viewer) " · Tick " (:tick game))]]
+           [:p (str "Playing as " (:name viewer) " · Tick " (:tick game))]
+           [:p "Invite link: "
+            [:a {:href (str "/join/" (:invite-token game))}
+             (str "/join/" (:invite-token game))]]]
           (when scheduled-for
             [:p.notice (str "Your setup is scheduled for tick " scheduled-for ".")])
           [:section
@@ -105,7 +108,9 @@
            [:p "Changes are applied at the next tick."]
            (when (seq errors)
              [:p.errors "Please correct the highlighted dish values."])
-           [:form {:method "post" :action (str "/games/" (:id game) "/players/" (:id viewer) "/setup")}
+           [:form {:method "post" :action (str "/games/" (:game-token game) "/setup")}
+            (when anti-forgery-token
+              [:input {:type "hidden" :name "__anti-forgery-token" :value anti-forgery-token}])
             [:fieldset
              [:legend "Interior"]
              [:label {:for "interior"} "Style"

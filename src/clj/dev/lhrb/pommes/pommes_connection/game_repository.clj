@@ -1,8 +1,14 @@
 (ns dev.lhrb.pommes.pommes-connection.game-repository
   (:require
    [clojure.edn :as edn]
+   [clojure.string :as str]
    [next.jdbc :as jdbc]
-   [next.jdbc.result-set :as rs]))
+   [next.jdbc.result-set :as rs])
+  (:import
+   [java.security MessageDigest SecureRandom]
+   [java.util Base64]
+   [javax.crypto SecretKeyFactory]
+   [javax.crypto.spec PBEKeySpec]))
 
 (def ^:private query-options
   {:builder-fn rs/as-unqualified-kebab-maps})
@@ -19,22 +25,81 @@
   [connectable]
   (jdbc/execute-one! connectable ["PRAGMA foreign_keys = ON"] query-options))
 
+(def ^:private token-alphabet "0123456789ABCDEFGHJKMNPQRSTVWXYZ")
+(def ^:private secure-random (SecureRandom.))
+(def ^:private password-iterations 600000)
+(def ^:private starter-setup
+  {:interior :classic
+   :dishes [{:name "Classic pommes"
+             :pommes {:size :small :portion 1.0 :seasoning :salt}
+             :topping :ketchup
+             :price 4.0}]})
+
+(defn normalize-token [token]
+  (some-> token str/trim str/upper-case))
+
+(defn- new-token []
+  (apply str (repeatedly 6 #(nth token-alphabet (.nextInt secure-random (count token-alphabet))))))
+
+(defn- base64 [bytes]
+  (.encodeToString (Base64/getEncoder) bytes))
+
+(defn- unbase64 [value]
+  (.decode (Base64/getDecoder) value))
+
+(defn- password-bytes [password salt iterations]
+  (let [spec (PBEKeySpec. (.toCharArray ^String password) salt iterations 256)]
+    (try
+      (.getEncoded (.generateSecret (SecretKeyFactory/getInstance "PBKDF2WithHmacSHA256") spec))
+      (finally (.clearPassword spec)))))
+
+(defn hash-password [password]
+  (let [salt (byte-array 16)]
+    (.nextBytes secure-random salt)
+    (str "pbkdf2-sha256$" password-iterations "$" (base64 salt) "$"
+         (base64 (password-bytes password salt password-iterations)))))
+
+(defn valid-password? [password encoded]
+  (try
+    (let [[algorithm iterations salt expected] (str/split (or encoded "") #"\$")]
+      (and (= algorithm "pbkdf2-sha256")
+           (MessageDigest/isEqual (unbase64 expected)
+                                  (password-bytes password (unbase64 salt)
+                                                  (Long/parseLong iterations)))))
+    (catch Exception _ false)))
+
+(defn- insert-game! [connectable name]
+  (loop []
+    (let [game-token (new-token)
+          invite-token (new-token)
+          game (try
+                 (let [row (jdbc/execute-one! connectable
+                                               ["INSERT INTO games (name, game_token, invite_token)
+                                                 VALUES (?, ?, ?) RETURNING id"
+                                                name game-token invite-token]
+                                               query-options)]
+                   {:id (:id row) :name name :game-token game-token :invite-token invite-token})
+                 (catch java.sql.SQLException error
+                   (if (str/includes? (.getMessage error) "UNIQUE constraint failed: games.")
+                     nil
+                     (throw error))))]
+      (or game (recur)))))
+
 (defn create-game!
   [connectable name]
-  (jdbc/execute-one! connectable
-                     ["INSERT INTO games (name) VALUES (?)" name]
-                     query-options)
-  (:id (jdbc/execute-one! connectable
-                          ["SELECT id FROM games WHERE name = ?" name]
-                          query-options)))
+  (:id (insert-game! connectable name)))
 
 (defn add-game-player!
-  [connectable {:keys [game-id player-id money prestige interior effects dishes]}]
+  [connectable {:keys [game-id player-id player-name money prestige interior effects dishes]}]
+  (let [player-name (or player-name
+                        (:name (jdbc/execute-one! connectable
+                                                   ["SELECT name FROM players WHERE id = ?" player-id]
+                                                   query-options)))]
   (jdbc/execute-one! connectable
                      ["INSERT INTO game_players
-                       (game_id, player_id, money, prestige, interior, active_effects)
-                       VALUES (?, ?, ?, ?, ?, ?)"
-                      game-id player-id (double (or money 20.0))
+                       (game_id, player_id, player_name, money, prestige, interior, active_effects)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)"
+                      game-id player-id player-name (double (or money 20.0))
                       (double (or prestige 0.0)) (name interior)
                       (encode (or effects []))]
                      query-options)
@@ -57,7 +122,65 @@
                           (name (:topping dish))
                           (double (:price dish))]
                          query-options))
-    game-player-id))
+    game-player-id)))
+
+(defn- player-name-in-use? [connectable game-id player-name]
+  (boolean
+   (jdbc/execute-one! connectable
+                      ["SELECT game_players.id FROM game_players
+                        WHERE game_players.game_id = ? AND game_players.player_name = ?"
+                       game-id player-name]
+                      query-options)))
+
+(defn- insert-player! [connectable game-id player-name password]
+  (:id (jdbc/execute-one! connectable
+                          ["INSERT INTO players (name, password_hash) VALUES (?, ?) RETURNING id"
+                           (str game-id ":" player-name) (hash-password password)]
+                          query-options)))
+
+(defn create-game-with-player!
+  [datasource game-name player-name password]
+  (jdbc/with-transaction [tx datasource]
+    (enable-foreign-keys! tx)
+    (let [game (insert-game! tx game-name)
+          player-id (insert-player! tx (:id game) player-name password)
+          game-player-id (add-game-player! tx (assoc starter-setup
+                                                      :game-id (:id game)
+                                                      :player-id player-id
+                                                      :player-name player-name))]
+      (assoc game :game-player-id game-player-id))))
+
+(defn join-game-with-player!
+  [datasource invite-token player-name password]
+  (jdbc/with-transaction [tx datasource]
+    (enable-foreign-keys! tx)
+    (let [game (jdbc/execute-one! tx
+                                  ["SELECT id, name, game_token, invite_token FROM games WHERE invite_token = ?"
+                                   (normalize-token invite-token)]
+                                  query-options)]
+      (cond
+        (nil? game) {:error :game-not-found}
+        (player-name-in-use? tx (:id game) player-name) {:error :player-name-taken :game game}
+        :else (let [player-id (insert-player! tx (:id game) player-name password)
+                    game-player-id (add-game-player! tx (assoc starter-setup
+                                                                :game-id (:id game)
+                                                                :player-id player-id
+                                                                :player-name player-name))]
+                (assoc game :game-player-id game-player-id))))))
+
+(defn authenticate-player
+  [connectable game-token player-name password]
+  (let [row (jdbc/execute-one! connectable
+                               ["SELECT games.game_token, game_players.id AS game_player_id,
+                                        players.password_hash
+                                 FROM games
+                                 JOIN game_players ON game_players.game_id = games.id
+                                 JOIN players ON players.id = game_players.player_id
+                                 WHERE games.game_token = ? AND game_players.player_name = ?"
+                                (normalize-token game-token) player-name]
+                               query-options)]
+    (when (and row (valid-password? password (:password-hash row)))
+      {:game-token (:game-token row) :game-player-id (:game-player-id row)})))
 
 (defn- load-dishes
   [connectable game-player-id]
@@ -110,7 +233,7 @@
         (jdbc/execute-one! connectable
                            ["SELECT game_players.id, game_players.money,
                                     game_players.prestige, game_players.interior,
-                                    game_players.active_effects, players.name AS player_name
+                                    game_players.active_effects, game_players.player_name
                               FROM game_players
                               JOIN players ON players.id = game_players.player_id
                               WHERE game_players.game_id = ? AND game_players.id = ?"
@@ -121,10 +244,9 @@
                                     ["SELECT id, name, tick FROM games WHERE id = ?" game-id]
                                     query-options)
             players (jdbc/execute! connectable
-                                  ["SELECT game_players.id, players.name AS player_name,
+                                  ["SELECT game_players.id, game_players.player_name,
                                            game_players.money, game_players.prestige
                                     FROM game_players
-                                    JOIN players ON players.id = game_players.player_id
                                     WHERE game_players.game_id = ?
                                     ORDER BY game_players.id"
                                    game-id]
@@ -150,6 +272,28 @@
          :latest-tick (when latest-tick
                         (assoc (decode (:summary latest-tick))
                                :tick (:tick latest-tick)))}))))
+
+(defn load-player-game-overview-by-token
+  [connectable game-token game-player-id simulation-config]
+  (when-let [game (jdbc/execute-one! connectable
+                                     ["SELECT id, game_token, invite_token FROM games WHERE game_token = ?"
+                                      (normalize-token game-token)]
+                                     query-options)]
+    (some-> (load-player-game-overview connectable (:id game) game-player-id simulation-config)
+            (assoc-in [:game :game-token] (:game-token game))
+            (assoc-in [:game :invite-token] (:invite-token game)))))
+
+(defn game-by-invite-token [connectable invite-token]
+  (jdbc/execute-one! connectable
+                     ["SELECT name, invite_token FROM games WHERE invite_token = ?"
+                      (normalize-token invite-token)]
+                     query-options))
+
+(defn game-by-token [connectable game-token]
+  (jdbc/execute-one! connectable
+                     ["SELECT name, game_token FROM games WHERE game_token = ?"
+                      (normalize-token game-token)]
+                     query-options))
 
 (defn schedule-setup!
   [datasource game-player-id setup]

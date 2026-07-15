@@ -1,6 +1,7 @@
 (ns dev.lhrb.pommes.pommes-connection.game-tick-test
   (:require
    [clojure.edn :as edn]
+   [clojure.string :as str]
    [clojure.test :refer [deftest is]]
    [dev.lhrb.pommes.pommes-connection.game-repository :as game-repository]
    [dev.lhrb.pommes.pommes-connection.game-tick :as game-tick]
@@ -87,17 +88,23 @@
                                           query-options)
               overview (game-repository/load-player-game-overview
                         datasource game-id game-player-id simulation-config)
+              game-token (:game-token (jdbc/execute-one! datasource
+                                                         ["SELECT game_token FROM games WHERE id = ?" game-id]
+                                                         query-options))
               handler (ring/ring-handler
                        (ig/init-key :app/routes {:datasource datasource}))
               page-response (handler {:request-method :get
-                                      :uri (str "/games/" game-id "/players/" game-player-id)})
+                                      :uri (str "/games/" game-token)
+                                      :session {:game-token game-token :game-player-id game-player-id}})
               invalid-setup-response
               (handler {:request-method :post
-                        :uri (str "/games/" game-id "/players/" game-player-id "/setup")
+                        :uri (str "/games/" game-token "/setup")
+                        :session {:game-token game-token :game-player-id game-player-id}
                         :params {"interior" "invalid"}})
               setup-response
               (handler {:request-method :post
-                        :uri (str "/games/" game-id "/players/" game-player-id "/setup")
+                        :uri (str "/games/" game-token "/setup")
+                        :session {:game-token game-token :game-player-id game-player-id}
                         :params {"interior" "modern"
                                  "dish-1-name" "Budget"
                                  "dish-1-size" "small"
@@ -136,7 +143,54 @@
           (is (= 400 (:status invalid-setup-response)))
           (is (re-find #"Name is required" (:body invalid-setup-response)))
           (is (= 302 (:status setup-response)))
-          (is (= (str "/games/" game-id "/players/" game-player-id "?scheduled-for=2")
+          (is (= (str "/games/" game-token "?scheduled-for=2")
                  (get-in setup-response [:headers "Location"])))))
+      (finally
+        (Files/deleteIfExists database-file)))))
+
+(deftest create-join-and-login-use-game-tokens-and-sessions
+  (let [database-file (Files/createTempFile "pommes-connection-access-" ".db"
+                                             (make-array java.nio.file.attribute.FileAttribute 0))
+        datasource (jdbc/get-datasource (str "jdbc:sqlite:" database-file))]
+    (try
+      (migratus/migrate {:store :database
+                         :db {:datasource datasource}
+                         :migration-dir "resources/migrations"})
+      (let [handler (ring/ring-handler (ig/init-key :app/routes {:datasource datasource}))
+            create-response (handler {:request-method :post
+                                      :uri "/create-game"
+                                      :params {"game-name" "Lunch rush"
+                                               "player-name" "Ada"
+                                               "player-password" "secret"}})
+            session (:session create-response)
+            game-token (:game-token session)
+            invite-token (:invite-token (jdbc/execute-one! datasource
+                                                           ["SELECT invite_token FROM games WHERE game_token = ?"
+                                                            game-token]
+                                                           query-options))
+            page-response (handler {:request-method :get
+                                    :uri (str "/games/" game-token)
+                                    :session session})
+            join-response (handler {:request-method :post
+                                    :uri (str "/join/" invite-token)
+                                    :params {"player-name" "Bea" "player-password" "another-secret"}})
+            duplicate-response (handler {:request-method :post
+                                         :uri (str "/join/" invite-token)
+                                         :params {"player-name" "Bea" "player-password" "another-secret"}})
+            login-response (handler {:request-method :post
+                                     :uri (str "/login/" (str/lower-case game-token))
+                                     :params {"player-name" "Ada" "player-password" "secret"}})
+            invalid-login-response (handler {:request-method :post
+                                             :uri (str "/login/" game-token)
+                                             :params {"player-name" "Ada" "player-password" "wrong"}})]
+        (is (re-matches #"[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{6}" game-token))
+        (is (= 302 (:status create-response)))
+        (is (= (str "/games/" game-token) (get-in create-response [:headers "Location"])))
+        (is (= 200 (:status page-response)))
+        (is (re-find #"Invite link" (:body page-response)))
+        (is (= 302 (:status join-response)))
+        (is (= 400 (:status duplicate-response)))
+        (is (= 302 (:status login-response)))
+        (is (= 401 (:status invalid-login-response))))
       (finally
         (Files/deleteIfExists database-file)))))

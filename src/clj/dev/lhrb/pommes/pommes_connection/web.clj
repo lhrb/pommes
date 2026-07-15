@@ -6,7 +6,7 @@
    [ring.util.response :as response]))
 
 (def site-defaults
-  (assoc-in defaults/site-defaults [:security :anti-forgery] false))
+  (assoc-in defaults/site-defaults [:security :anti-forgery] true))
 
 (defmethod ig/init-key :app/web
   [_ {:keys [router]}]
