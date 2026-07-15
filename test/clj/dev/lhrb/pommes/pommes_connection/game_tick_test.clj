@@ -38,7 +38,21 @@
                           :seasoning {:salt 1.0}
                           :topping {:ketchup 1.0}
                           :price {:model :cheap :max 8.0}
-                          :interior {:classic 1.0 :punk 1.0}}}]}}))
+                          :interior {:classic 1.0 :cozy 1.0}}}]}}))
+
+(deftest game-data-catalog-is-covered-by-demographic-preferences
+  (let [catalog (:catalog game-data/game-data)
+        demographics (get-in game-data/game-data [:city :demographics])
+        price-anchors (get-in game-data/game-data [:market :price-anchors])]
+    (is (not (contains? (:interiors catalog) :punk)))
+    (doseq [demographic demographics]
+      (is (contains? price-anchors (:id demographic)))
+      (is (= (set (keys (:seasonings catalog)))
+             (set (keys (get-in demographic [:preferences :seasoning])))))
+      (is (= (set (keys (:toppings catalog)))
+             (set (keys (get-in demographic [:preferences :topping])))))
+      (is (= (set (keys (:interiors catalog)))
+             (set (keys (get-in demographic [:preferences :interior]))))))))
 
 (defn- anti-forgery-token [body]
   (second (re-find #"name=\"__anti-forgery-token\"[^>]*value=\"([^\"]+)\"" body)))
@@ -124,15 +138,15 @@
                                         :price 4.0}]})]
         (game-repository/schedule-setup!
          datasource game-player-id
-         {:interior :punk
-          :dishes [{:name "Punk special"
+         {:interior :cozy
+          :dishes [{:name "Cozy special"
                     :pommes {:size :small :seasoning :salt}
                     :topping :ketchup
                     :price 5.0}]})
         (game-repository/schedule-setup!
          datasource game-player-id
-         {:interior :punk
-          :dishes [{:name "Punk special"
+         {:interior :cozy
+          :dishes [{:name "Cozy special"
                     :pommes {:size :small :seasoning :salt}
                     :topping :ketchup
                     :price 5.5}]})
@@ -187,8 +201,8 @@
                                  :dish-3-topping "special"
                                  :dish-3-price "6.0"}})]
           (is (= 1 (:tick game)))
-          (is (= "punk" (:interior player)))
-          (is (= "Punk special" (:name dish)))
+          (is (= "cozy" (:interior player)))
+          (is (= "Cozy special" (:name dish)))
           (is (= 5.5 (:price dish)))
           (is (zero? (:count queued)))
           (is (= 1 (:tick history)))
@@ -198,7 +212,7 @@
                                   [:players 0 :demographic-sales :locals])}
                  (get-in overview [:latest-tick :players 0 :demographic-sales])))
           (is (= "Ada" (get-in overview [:players 0 :name])))
-          (is (= "Punk special" (get-in overview [:viewer :dishes 0 :name])))
+          (is (= "Cozy special" (get-in overview [:viewer :dishes 0 :name])))
           (is (= 200 (:status page-response)))
           (is (re-find #"Current demographics" (:body page-response)))
           (is (re-find #"Sales by demographic" (:body page-response)))

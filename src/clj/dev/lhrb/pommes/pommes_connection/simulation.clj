@@ -1236,7 +1236,7 @@
        :interior
        {:classic 0.5
         :modern 0.8
-        :punk 1.0}}}
+        :street-food 1.0}}}
 
      {:id :families
       :population 350
@@ -1283,7 +1283,7 @@
        :interior
        {:classic 1.0
         :modern 0.8
-        :punk 0.2}}}
+        :street-food 0.2}}}
 
      {:id :yuppies
       :population 180
@@ -1338,13 +1338,13 @@
        :interior
        {:classic 0.2
         :modern 1.0
-        :punk 0.6}}}]}
+        :street-food 0.6}}}]}
 
    :players
    [{:id :fritza
      :money 20.0
      :prestige 0.0
-     :interior :punk
+     :interior :street-food
      :market-modifiers {}
      :effects []
 
@@ -1437,7 +1437,7 @@
   (merge
    {:tick 0
     :players
-    [{:id :fritza :money 20.0 :prestige 0.0 :interior :punk :market-modifiers {} :effects []
+    [{:id :fritza :money 20.0 :prestige 0.0 :interior :street-food :market-modifiers {} :effects []
       :dishes [{:id :cheap-ketchup :pommes {:size :small :seasoning :salt} :topping :ketchup :price 3.50}
                {:id :large-mayo :pommes {:size :large :seasoning :pommesgewuerz} :topping :mayo :price 5.20}
                {:id :special :pommes {:size :large :seasoning :pommesgewuerz} :topping :special :price 6.00}]}

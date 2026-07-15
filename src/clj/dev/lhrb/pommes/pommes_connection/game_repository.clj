@@ -395,5 +395,5 @@
                      query-options))
 
 (comment
-  ;; (schedule-setup! datasource game-player-id {:interior :punk :dishes [...]})
+  ;; (schedule-setup! datasource game-player-id {:interior :cozy :dishes [...]})
   )

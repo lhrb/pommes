@@ -23,10 +23,14 @@
                :mayo {:cost 0.16}
                :ketchup-mayo {:cost 0.25}
                :special {:cost 0.55}
-               :sate {:cost 0.60}}
+               :sate {:cost 0.60}
+               :curry-ketchup {:cost 0.16}
+               :garlic-sauce {:cost 0.20}}
     :interiors {:classic {}
                 :modern {}
-                :punk {}}}
+                :cozy {}
+                :street-food {}
+                :premium {}}}
 
    :setup
    {:dish-count 3
@@ -40,7 +44,10 @@
    :market
    {:price-anchors {:students 4.50
                     :families 5.50
-                    :yuppies 6.00}}
+                    :yuppies 6.00
+                    :office-workers 5.25
+                    :retirees 4.75
+                    :foodies 7.50}}
 
    :city
    {:demographics
@@ -54,9 +61,10 @@
       {:weights {:size 1.0 :seasoning 0.3 :topping 0.9 :price 1.8 :interior 0.2}
        :size {:small 0.9 :medium 0.7 :large 0.5 :extra-large 0.3}
        :seasoning {:salt 0.8 :pommesgewuerz 0.7}
-       :topping {:none 0.3 :ketchup 1.0 :mayo 0.7 :ketchup-mayo 0.9 :special 0.4 :sate 0.5}
+       :topping {:none 0.3 :ketchup 1.0 :mayo 0.7 :ketchup-mayo 0.9
+                 :special 0.4 :sate 0.5 :curry-ketchup 0.8 :garlic-sauce 0.6}
        :price {:model :cheap :max 5.00 :anchor 4.50 :relative-price-strength 0.25}
-       :interior {:classic 0.5 :modern 0.8 :punk 1.0}}}
+       :interior {:classic 0.5 :modern 0.8 :cozy 0.6 :street-food 1.0 :premium 0.4}}}
 
      {:id :families
       :population 350
@@ -68,9 +76,10 @@
       {:weights {:size 1.3 :seasoning 0.4 :topping 0.7 :price 1.0 :interior 0.8}
        :size {:small 0.7 :medium 0.8 :large 0.9 :extra-large 1.0}
        :seasoning {:salt 1.0 :pommesgewuerz 0.6}
-       :topping {:none 0.5 :ketchup 1.0 :mayo 0.8 :ketchup-mayo 0.9 :special 0.5 :sate 0.2}
+       :topping {:none 0.5 :ketchup 1.0 :mayo 0.8 :ketchup-mayo 0.9
+                 :special 0.5 :sate 0.2 :curry-ketchup 0.6 :garlic-sauce 0.5}
        :price {:model :value :ideal 5.50 :tolerance 2.25 :anchor 5.50 :relative-price-strength 0.10}
-       :interior {:classic 1.0 :modern 0.8 :punk 0.2}}}
+       :interior {:classic 1.0 :modern 0.8 :cozy 0.9 :street-food 0.6 :premium 0.5}}}
 
      {:id :yuppies
       :population 180
@@ -82,9 +91,57 @@
       {:weights {:size 1.3 :seasoning 0.5 :topping 1.4 :price 1.0 :interior 1.3}
        :size {:small 1.0 :medium 0.65 :large 0.3 :extra-large 0.0}
        :seasoning {:salt 0.4 :pommesgewuerz 1.0}
-       :topping {:none 0.2 :ketchup 0.1 :mayo 0.2 :ketchup-mayo 0.1 :special 1.0 :sate 0.8}
+       :topping {:none 0.2 :ketchup 0.1 :mayo 0.2 :ketchup-mayo 0.1
+                 :special 1.0 :sate 0.8 :curry-ketchup 0.7 :garlic-sauce 0.7}
        :price {:model :status :ideal 9.00 :tolerance 3.00 :anchor 6.00 :status-strength 0.40}
-       :interior {:classic 0.2 :modern 1.0 :punk 0.6}}}]}})
+       :interior {:classic 0.2 :modern 1.0 :cozy 0.6 :street-food 0.8 :premium 1.0}}}
+
+     {:id :office-workers
+      :population 300
+      :eat-rate 0.11
+      :outside-option-utility 0.50
+      :behavior {:topping-variety-strength 0.10
+                 :positioning-variety-strength 0.05}
+      :preferences
+      {:weights {:size 0.8 :seasoning 0.5 :topping 0.8 :price 1.5 :interior 0.6}
+       :size {:small 0.6 :medium 1.0 :large 0.7 :extra-large 0.3}
+       :seasoning {:salt 0.8 :pommesgewuerz 0.9}
+       :topping {:none 0.2 :ketchup 0.8 :mayo 0.5 :ketchup-mayo 0.6
+                 :special 0.5 :sate 0.5 :curry-ketchup 1.0 :garlic-sauce 0.7}
+       :price {:model :value :ideal 5.25 :tolerance 1.75 :anchor 5.25
+               :relative-price-strength 0.15}
+       :interior {:classic 0.5 :modern 1.0 :cozy 0.6 :street-food 0.9 :premium 0.5}}}
+
+     {:id :retirees
+      :population 220
+      :eat-rate 0.09
+      :outside-option-utility 0.54
+      :behavior {:topping-variety-strength 0.0
+                 :positioning-variety-strength 0.0}
+      :preferences
+      {:weights {:size 0.8 :seasoning 0.4 :topping 0.6 :price 1.4 :interior 1.2}
+       :size {:small 0.8 :medium 1.0 :large 0.6 :extra-large 0.2}
+       :seasoning {:salt 1.0 :pommesgewuerz 0.4}
+       :topping {:none 0.8 :ketchup 0.8 :mayo 0.9 :ketchup-mayo 0.7
+                 :special 0.3 :sate 0.1 :curry-ketchup 0.3 :garlic-sauce 0.4}
+       :price {:model :cheap :max 5.50 :anchor 4.75 :relative-price-strength 0.15}
+       :interior {:classic 1.0 :modern 0.4 :cozy 1.0 :street-food 0.3 :premium 0.5}}}
+
+     {:id :foodies
+      :population 140
+      :eat-rate 0.06
+      :outside-option-utility 0.55
+      :behavior {:topping-variety-strength 0.30
+                 :positioning-variety-strength 0.25}
+      :preferences
+      {:weights {:size 0.7 :seasoning 1.2 :topping 1.5 :price 0.8 :interior 1.1}
+       :size {:small 0.9 :medium 0.8 :large 0.5 :extra-large 0.2}
+       :seasoning {:salt 0.3 :pommesgewuerz 1.0}
+       :topping {:none 0.1 :ketchup 0.2 :mayo 0.3 :ketchup-mayo 0.2
+                 :special 0.8 :sate 0.9 :curry-ketchup 0.7 :garlic-sauce 1.0}
+       :price {:model :status :ideal 7.50 :tolerance 2.50 :anchor 7.50
+               :status-strength 0.30}
+       :interior {:classic 0.3 :modern 0.8 :cozy 0.8 :street-food 0.7 :premium 1.0}}}]}})
 
 (defn simulation-config []
   (select-keys game-data [:rules :catalog :city :market]))
