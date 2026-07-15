@@ -22,6 +22,24 @@ To reload changes:
 (reset)
 ```
 
+## Market balancing in the REPL
+
+The pure market analysis helpers provide repeatable scenarios without starting
+the web app or touching the database.
+
+```clojure
+(require '[dev.lhrb.pommes.pommes-connection.market-analysis :as market-analysis])
+
+;; Per-player and min/max/average profit for every scenario at ticks 1 and 10.
+(market-analysis/scenario-report)
+
+;; Explore one scenario and inspect its allocations and utility components.
+(market-analysis/run-scenario :price-pressure 10)
+```
+
+The named scenarios are available in `market-analysis/scenarios`. Tick 1 shows
+the immediate result; tick 10 shows the same setup after market memory adapts.
+
 ## REPLs
 
 ### Cursive
