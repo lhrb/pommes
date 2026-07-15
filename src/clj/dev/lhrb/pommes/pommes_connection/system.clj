@@ -3,6 +3,7 @@
    [clojure.tools.logging :as log]
    [dev.lhrb.pommes.pommes-connection.db]
    [dev.lhrb.pommes.pommes-connection.env :refer [defaults]]
+   [dev.lhrb.pommes.pommes-connection.game-scheduler]
    [dev.lhrb.pommes.pommes-connection.routes]
    [dev.lhrb.pommes.pommes-connection.web]
    [integrant.core :as ig]

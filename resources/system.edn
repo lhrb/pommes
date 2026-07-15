@@ -10,6 +10,11 @@
  {:datasource    #ig/ref :app/db
   :migration-dir "migrations"}
 
+ :app/game-ticker
+ {:datasource #ig/ref :app/migrations
+  :poll-millis 1000
+  :max-ticks-per-game 10}
+
  :app/routes
  {:datasource #ig/ref :app/migrations}
 

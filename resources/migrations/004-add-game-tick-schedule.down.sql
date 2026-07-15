@@ -1,0 +1,2 @@
+-- SQLite cannot drop columns without rebuilding the table. This migration is
+-- intentionally irreversible because next_tick_at is only scheduling metadata.

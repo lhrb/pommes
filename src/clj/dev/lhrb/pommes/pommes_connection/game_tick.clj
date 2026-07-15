@@ -8,6 +8,10 @@
 (def default-simulation-config
   (game-data/simulation-config))
 
+(defn- tick-millis
+  [simulation-config]
+  (* 1000 (get-in simulation-config [:rules :tick-seconds])))
+
 (defn- setup-dishes
   [dishes]
   (mapv (fn [index dish]
@@ -53,11 +57,30 @@
      (let [state (game-repository/load-game-state tx game-id simulation-config)
            actions (game-repository/load-actions tx game-id (inc (:tick state)))
            state-with-actions (reduce apply-action state actions)
-           updated-state (simulation/simulate-tick state-with-actions)
+           updated-state (assoc (simulation/simulate-tick state-with-actions)
+                                :next-tick-at (+ (:next-tick-at state)
+                                                 (tick-millis simulation-config)))
            summary (tick-summary updated-state)]
        (game-repository/persist-tick! tx updated-state (mapv :id actions) summary)
        summary))))
 
+(defn run-due-ticks!
+  "Runs up to max-ticks-per-game overdue ticks for every game due at now."
+  ([datasource now]
+   (run-due-ticks! datasource now default-simulation-config 10))
+  ([datasource now simulation-config max-ticks-per-game]
+   (mapv (fn [game-id]
+           {:game-id game-id
+            :summaries
+            (loop [summaries []]
+              (if (and (< (count summaries) max-ticks-per-game)
+                       (game-repository/game-due? datasource game-id now))
+                (recur (conj summaries
+                             (run-next-tick! datasource game-id simulation-config)))
+                summaries))})
+         (game-repository/due-game-ids datasource now))))
+
 (comment
   ;; (run-next-tick! datasource game-id)
+  ;; (run-due-ticks! datasource (System/currentTimeMillis))
   )

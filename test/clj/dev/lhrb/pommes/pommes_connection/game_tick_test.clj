@@ -43,6 +43,34 @@
 (defn- anti-forgery-token [body]
   (second (re-find #"name=\"__anti-forgery-token\"[^>]*value=\"([^\"]+)\"" body)))
 
+(deftest due-games-catch-up-in-bounded-batches
+  (let [database-file (Files/createTempFile "pommes-connection-schedule-" ".db"
+                                             (make-array java.nio.file.attribute.FileAttribute 0))
+        datasource (jdbc/get-datasource (str "jdbc:sqlite:" database-file))]
+    (try
+      (migratus/migrate {:store :database
+                         :db {:datasource datasource}
+                         :migration-dir "resources/migrations"})
+      (let [game-id (game-repository/create-game! datasource "Scheduled game")
+            now (System/currentTimeMillis)
+            tick-millis (* 1000 (get-in simulation-config [:rules :tick-seconds]))]
+        (jdbc/execute-one! datasource
+                           ["UPDATE games SET next_tick_at = ? WHERE id = ?"
+                            (- now (* 2 tick-millis)) game-id]
+                           query-options)
+        (game-tick/run-due-ticks! datasource now simulation-config 2)
+        (is (= 2 (:tick (jdbc/execute-one! datasource
+                                             ["SELECT tick FROM games WHERE id = ?" game-id]
+                                             query-options))))
+        (is (game-repository/game-due? datasource game-id now))
+        (game-tick/run-due-ticks! datasource now simulation-config 2)
+        (is (= 3 (:tick (jdbc/execute-one! datasource
+                                             ["SELECT tick FROM games WHERE id = ?" game-id]
+                                             query-options))))
+        (is (not (game-repository/game-due? datasource game-id now))))
+      (finally
+        (Files/deleteIfExists database-file)))))
+
 (deftest queued-setup-is-applied-by-a-persisted-tick
   (let [database-file (Files/createTempFile "pommes-connection-" ".db"
                                              (make-array java.nio.file.attribute.FileAttribute 0))

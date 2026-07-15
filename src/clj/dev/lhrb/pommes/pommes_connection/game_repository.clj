@@ -66,11 +66,13 @@
   (loop []
     (let [game-token (new-token)
           invite-token (new-token)
+          next-tick-at (+ (System/currentTimeMillis)
+                          (* 1000 (get-in game-data/game-data [:rules :tick-seconds])))
           game (try
                  (let [row (jdbc/execute-one! connectable
-                                               ["INSERT INTO games (name, game_token, invite_token)
-                                                 VALUES (?, ?, ?) RETURNING id"
-                                                name game-token invite-token]
+                                               ["INSERT INTO games (name, game_token, invite_token, next_tick_at)
+                                                 VALUES (?, ?, ?, ?) RETURNING id"
+                                                name game-token invite-token next-tick-at]
                                                query-options)]
                    {:id (:id row) :name name :game-token game-token :invite-token invite-token})
                  (catch java.sql.SQLException error
@@ -195,7 +197,7 @@
 (defn load-game-state
   [connectable game-id simulation-config]
   (let [game (jdbc/execute-one! connectable
-                                ["SELECT id, tick, market_state FROM games WHERE id = ?" game-id]
+                                ["SELECT id, tick, market_state, next_tick_at FROM games WHERE id = ?" game-id]
                                 query-options)]
     (when-not game
       (throw (ex-info "Game does not exist" {:game-id game-id})))
@@ -207,6 +209,7 @@
       (merge simulation-config
              {:game-id game-id
               :tick (:tick game)
+              :next-tick-at (:next-tick-at game)
               :market (decode (:market-state game))
               :players
               (mapv (fn [player]
@@ -335,11 +338,29 @@
                         game-id apply-at-tick]
                        query-options)))
 
+(defn due-game-ids
+  [connectable now]
+  (mapv :id
+        (jdbc/execute! connectable
+                       ["SELECT id FROM games
+                         WHERE next_tick_at <= ?
+                         ORDER BY next_tick_at, id"
+                        now]
+                       query-options)))
+
+(defn game-due?
+  [connectable game-id now]
+  (boolean
+   (jdbc/execute-one! connectable
+                      ["SELECT id FROM games WHERE id = ? AND next_tick_at <= ?"
+                       game-id now]
+                      query-options)))
+
 (defn persist-tick!
   [connectable state action-ids summary]
   (jdbc/execute-one! connectable
-                     ["UPDATE games SET tick = ?, market_state = ? WHERE id = ?"
-                      (:tick state) (encode (:market state)) (:game-id state)]
+                     ["UPDATE games SET tick = ?, market_state = ?, next_tick_at = ? WHERE id = ?"
+                      (:tick state) (encode (:market state)) (:next-tick-at state) (:game-id state)]
                      query-options)
   (doseq [player (:players state)]
     (jdbc/execute-one! connectable
