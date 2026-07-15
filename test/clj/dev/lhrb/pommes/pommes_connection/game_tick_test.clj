@@ -6,6 +6,7 @@
    [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
    [dev.lhrb.pommes.pommes-connection.game-repository :as game-repository]
    [dev.lhrb.pommes.pommes-connection.game-tick :as game-tick]
+   [dev.lhrb.pommes.pommes-connection.simulation :as simulation]
    [dev.lhrb.pommes.pommes-connection.routes]
    [dev.lhrb.pommes.pommes-connection.web :as web]
    [integrant.core :as ig]
@@ -41,6 +42,34 @@
 
 (defn- anti-forgery-token [body]
   (second (re-find #"name=\"__anti-forgery-token\"[^>]*value=\"([^\"]+)\"" body)))
+
+(deftest customer-orders-are-whole-and-deterministic
+  (let [choices [{:share 0.4} {:share 0.4} {:share 0.2}]
+        allocation (simulation/allocate-orders 4 choices)
+        demographic (assoc (first (get-in simulation-config [:city :demographics]))
+                           :population 126
+                           :eat-rate 0.1)
+        player {:id :ada
+                :interior :classic
+                :market-modifiers {}
+                :effects []
+                :dishes [{:id :classic
+                          :pommes {:size :small :seasoning :salt}
+                          :topping :ketchup
+                          :price 4.0}]}
+        result (simulation/simulate-demographic (:rules simulation-config)
+                                                (:catalog simulation-config)
+                                                (:market simulation-config)
+                                                [player]
+                                                demographic)
+        allocations (:allocations result)]
+    (is (= [2 1 1] (mapv second allocation)))
+    (is (= 13 (:potential-demand result)))
+    (is (every? #(integer? (:sales %)) allocations))
+    (is (= (:potential-demand result)
+           (reduce + 0 (map :sales allocations))))
+    (is (every? #(= (* (:sales %) (:price %)) (:revenue %))
+                (filter #(= :purchase (:kind %)) allocations)))))
 
 (deftest due-games-catch-up-in-bounded-batches
   (let [database-file (Files/createTempFile "pommes-connection-schedule-" ".db"

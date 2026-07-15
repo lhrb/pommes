@@ -2,9 +2,9 @@
   (:require
    [dev.lhrb.pommes.pommes-connection.game-data :as game-data]))
 
-;; Sales are expected values. Fractional sales are intentional.
-;; With a 30-second tick this is simpler and less noisy than simulating
-;; individual customers.
+;; Each tick assigns a whole number of customers to offers. Softmax shares
+;; still express preference, while largest-remainder allocation keeps the
+;; result deterministic and reproducible.
 
 ;; ---------------------------------------------------------------------------
 ;; Numeric helpers
@@ -700,11 +700,35 @@
 ;; Demographic simulation
 ;; ---------------------------------------------------------------------------
 
+(defn allocate-orders
+  "Allocates a whole customer count according to choice shares.
+
+   Remaining orders go to the largest fractional remainders. Ties preserve
+   the original choice order, keeping equivalent simulations reproducible."
+  [demand choices]
+  (let [ranked
+        (mapv (fn [index choice]
+                (let [expected (* demand (double (:share choice)))
+                      sales (long (Math/floor expected))]
+                  {:index index
+                   :choice choice
+                   :sales sales
+                   :remainder (- expected sales)}))
+              (range)
+              choices)
+        remaining (- demand (reduce + 0 (map :sales ranked)))
+        bonus-indexes (into #{}
+                            (map :index)
+                            (take remaining
+                                  (sort-by (juxt (comp - :remainder) :index)
+                                           ranked)))]
+    (mapv (fn [{:keys [index choice sales]}]
+            [choice (+ sales (if (contains? bonus-indexes index) 1 0))])
+          ranked)))
+
 (defn allocate-choice
-  [catalog demographic demand choice]
-  (let [sales
-        (* demand
-           (double (:share choice)))
+  [catalog demographic choice sales]
+  (let [sales (long sales)
 
         base
         {:kind (:kind choice)
@@ -742,8 +766,10 @@
 (defn simulate-demographic
   [rules catalog market players demographic]
   (let [potential-demand
-        (* (double (:population demographic))
-           (double (:eat-rate demographic)))
+        (long
+          (Math/round
+            (* (double (:population demographic))
+               (double (:eat-rate demographic)))))
 
         beta
         (double
@@ -771,11 +797,9 @@
 
         allocations
         (mapv
-          #(allocate-choice
-             catalog demographic
-             potential-demand
-             %)
-          choices)
+          (fn [[choice sales]]
+            (allocate-choice catalog demographic choice sales))
+          (allocate-orders potential-demand choices))
 
         purchases
         (filter
@@ -795,12 +819,12 @@
      :potential-demand potential-demand
 
      :served-demand
-     (reduce + 0.0
+     (reduce + 0
              (map :sales
                   purchases))
 
      :unserved-demand
-     (double (:sales outside))
+     (:sales outside)
 
      :allocations allocations}))
 
@@ -809,7 +833,7 @@
 ;; ---------------------------------------------------------------------------
 
 (def empty-stats
-  {:sales 0.0
+  {:sales 0
    :revenue 0.0
    :profit 0.0
    :dish-sales {}
@@ -839,7 +863,7 @@
     (-> stats
         (update-in
           [player-id :sales]
-          (fnil + 0.0)
+          (fnil + 0)
           sales)
 
         (update-in
@@ -854,14 +878,14 @@
 
         (update-in
           [player-id :dish-sales dish-id]
-          (fnil + 0.0)
+          (fnil + 0)
           sales)
 
         (update-in
           [player-id
-           :demographic-sales
+          :demographic-sales
            demographic-id]
-          (fnil + 0.0)
+          (fnil + 0)
           sales))))
 
 (defn update-player
@@ -876,7 +900,7 @@
       ;; Every sold dish produces one prestige.
       (update
         :prestige
-        (fnil + 0.0)
+        (fnil + 0)
         (:sales stats))
 
       (assoc

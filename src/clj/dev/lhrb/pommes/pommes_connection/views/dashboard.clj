@@ -17,11 +17,18 @@
     (-> (layout/page
          "Pommes Connection health"
          [:main
-          [:h1 "Pommes Connection"]
-          [:h2 "Health"]
-          [:ul
-           [:li "Server: ready"]
-           [:li (str "Database: " (if database-ready? "ready" "not ready"))]]])
+          [:header.masthead
+           [:p.eyebrow "Pommes Connection · machine room"]
+           [:h1 "City desk status"]
+           [:p.subhead "The fryer line is being watched."]]
+          (layout/panel (if database-ready? "panel--yellow" "panel--quiet")
+                        [[:h2 "Service bulletin"]
+                         (layout/stat-row "Server" "ready")
+                         (layout/stat-row "Database" (if database-ready? "ready" "not ready"))
+                         [:p.meta (str "Server: ready · Database: " (if database-ready? "ready" "not ready"))]
+                         [:p.meta (if database-ready?
+                                    "No inspector nearby."
+                                    "Inspector nearby: database needs attention.")]])])
         (response/response)
         (response/content-type "text/html; charset=utf-8")
         (response/status status))))

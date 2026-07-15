@@ -22,7 +22,7 @@
   (format "€%.2f" (double (or value 0.0))))
 
 (defn- quantity [value]
-  (format "%.1f" (double (or value 0.0))))
+  (format "%d" (long (Math/round (double (or value 0.0))))))
 
 (defn- select-input [field value options cost]
   [:select {:name field :id field}
@@ -72,6 +72,30 @@
 (defn- viewer-tick-summary [latest-tick viewer-id]
   (some #(when (= viewer-id (:player-id %)) %) (:players latest-tick)))
 
+(defn- city-notice [game viewer-result scheduled-for]
+  (cond
+    scheduled-for ["good" (str "Menu changes filed for tick " scheduled-for ". The neighborhood is watching.")]
+    (nil? viewer-result) ["quiet" "Suspiciously quiet. The first lunch crowd has not arrived."]
+    (pos? (:profit viewer-result)) ["good" "Lunch rush report: your counter cleared a profit."]
+    :else ["warning" "Strange review in the local paper: mind the margin at the next rush."]))
+
+(defn- demand-card [{:keys [id population eat-rate]}]
+  (let [demand (* population eat-rate)]
+    (layout/offer-card
+     [[:div.offer-card__top
+       [:h3 (label id)]
+       (layout/badge (str (quantity demand) " plates"))]
+      [:p.meta (str population " locals · possible hunger per tick")]
+      (layout/meter (* 100 (/ demand 60.0)))])))
+
+(defn- player-card [player viewer]
+  (layout/offer-card
+   [[:div.offer-card__top
+     [:strong (:name player)]
+     (when (= (:id player) (:id viewer)) (layout/badge "You"))]
+    [:div.stat-row [:span "Counter cash"] [:strong (money (:money player))]]
+    [:div.stat-row [:span "Prestige"] [:strong (quantity (:prestige player))]]]))
+
 (defn page
   [{:keys [game viewer players city latest-tick form errors scheduled-for anti-forgery-token]}]
   (let [options (setup-options)
@@ -80,67 +104,66 @@
     (-> (layout/page
          (str (:name game) " | Pommes Connection")
          [:main
-          [:header
+          [:header.masthead
+           [:p.eyebrow "Pommes Connection · local edition"]
            [:h1 (:name game)]
-           [:p (str "Playing as " (:name viewer) " · Tick " (:tick game))]
-           [:p "Invite link: "
-            [:a {:href (str "/join/" (:invite-token game))}
-             (str "/join/" (:invite-token game))]]]
-          (when scheduled-for
-            [:p.notice (str "Your setup is scheduled for tick " scheduled-for ".")])
-          [:section
-           [:h2 "Current demographics"]
-           [:table
-            [:thead [:tr [:th "Segment"] [:th "Population"] [:th "Potential demand / tick"]]]
-            [:tbody
-             (for [{:keys [id population eat-rate]} (:demographics city)]
-               [:tr [:td (label id)] [:td population]
-                [:td.numeric (quantity (* population eat-rate))]])]]]
-          [:section
-           [:h2 "Players"]
-           [:table
-            [:thead [:tr [:th "Player"] [:th "Money"] [:th "Prestige"]]]
-            [:tbody
-             (for [player players]
-               [:tr [:td (:name player)] [:td.numeric (money (:money player))]
-                [:td.numeric (quantity (:prestige player))]])]]]
-          [:section
-           [:h2 "Last tick"]
-           (if viewer-result
-             [:div
-              [:p (str "Tick " (:tick latest-tick))]
-              [:table
-               [:thead [:tr [:th "Sales"] [:th "Revenue"] [:th "Profit"] [:th "Money"] [:th "Prestige"]]]
-               [:tbody [:tr [:td.numeric (quantity (:sales viewer-result))]
-                        [:td.numeric (money (:revenue viewer-result))]
-                        [:td.numeric (money (:profit viewer-result))]
-                        [:td.numeric (money (:money viewer-result))]
-                        [:td.numeric (quantity (:prestige viewer-result))]]]]
-              [:h3 "Sales by demographic"]
-              [:table
-               [:thead [:tr [:th "Segment"] [:th "Sales"]]]
-               [:tbody
-                (for [{:keys [id]} (:demographics city)]
-                  [:tr [:td (label id)]
-                   [:td.numeric (quantity (get (:demographic-sales viewer-result) id))]])]]]
-             [:p "No tick has completed yet."])]
-          [:section
-           [:h2 "Set up your dishes"]
-           [:p "Changes are applied at the next tick."]
-           (when (seq errors)
-             [:p.errors "Please correct the highlighted dish values."])
-           [:form {:method "post" :action (str "/games/" (:game-token game) "/setup")}
-            (when anti-forgery-token
-              [:input {:type "hidden" :name "__anti-forgery-token" :value anti-forgery-token}])
-            [:fieldset
-             [:legend "Interior"]
-             [:label {:for "interior"} "Style"
-              (select-input "interior" (or (:interior form) (:interior viewer)) (:interiors options) nil)]
-             (when-let [interior-errors (seq (:interior errors))]
-               [:ul.errors (for [error interior-errors] [:li error])])]
-            (map-indexed (fn [index dish] (dish-field options (inc index) dish errors)) dishes)
-            [:button {:type "submit"} "Schedule setup"]]
-          [:script (hiccup/raw-string cost-script)]]])
+           [:p.subhead (str "Counter: " (:name viewer) " · ") (layout/badge (str "Tick " (:tick game)))]]
+          (let [[kind message] (city-notice game viewer-result scheduled-for)]
+            (layout/notice kind message))
+          (layout/panel "panel--yellow"
+                        [[:div.offer-card__top
+                          [:h2 "Counter report"]
+                          (layout/badge "Today")]
+                         (if viewer-result
+                           [:div.grid.grid--three
+                            (layout/stat-row "Sales" (quantity (:sales viewer-result)))
+                            (layout/stat-row "Profit" (money (:profit viewer-result)))
+                            (layout/stat-row "Cash" (money (:money viewer-result)))]
+                           [:p "No takings yet. Set a menu before the first crowd appears."])])
+          (layout/panel "panel--tight"
+                        [[:h2 "Current demographics · the block is talking"]
+                         [:div.grid.grid--three (map demand-card (:demographics city))]])
+          (layout/panel "panel--tight"
+                        [[:h2 "Rival watch"]
+                         [:p.meta "Rumor: someone nearby is always considering a discount."]
+                         [:div.grid.grid--two (map #(player-card % viewer) players)]])
+          (when viewer-result
+            (layout/panel "panel--tight"
+                          [[:h2 (str "Tick " (:tick latest-tick) " receipt")]
+                           [:div.grid.grid--two
+                            (layout/stat-row "Revenue" (money (:revenue viewer-result)))
+                            (layout/stat-row "Prestige" (quantity (:prestige viewer-result)))]
+                           [:h3 "Sales by demographic"]
+                           [:table
+                            [:thead [:tr [:th "Street crowd"] [:th.numeric "Orders"]]]
+                            [:tbody
+                             (for [{:keys [id]} (:demographics city)]
+                               [:tr [:td (label id)]
+                                [:td.numeric (quantity (get (:demographic-sales viewer-result) id))]])]]]))
+          (layout/panel "panel--yellow"
+                        [[:div.offer-card__top
+                          [:h2 "Print tomorrow's menu"]
+                          (layout/badge "Next tick")]
+                         [:p "Changes wait for the next rush. Keep it short; let the fries speak."]
+                         (when (seq errors)
+                           [:p.errors "Please correct the marked menu details."])
+                         [:form {:method "post" :action (str "/games/" (:game-token game) "/setup")}
+                          (when anti-forgery-token
+                            [:input {:type "hidden" :name "__anti-forgery-token" :value anti-forgery-token}])
+                          [:fieldset
+                           [:legend "Interior"]
+                           [:label {:for "interior"} "Counter mood"
+                            (select-input "interior" (or (:interior form) (:interior viewer)) (:interiors options) nil)]
+                           (when-let [interior-errors (seq (:interior errors))]
+                             [:ul.errors (for [error interior-errors] [:li error])])]
+                          (map-indexed (fn [index dish] (dish-field options (inc index) dish errors)) dishes)
+                          (layout/button "Schedule next tick")]])
+          (layout/panel "panel--quiet"
+                        [[:h2 "Pinboard"]
+                         [:p.invite "Invite link · another fryer wanted: "
+                          [:a {:href (str "/join/" (:invite-token game))}
+                           (str "/join/" (:invite-token game))]]])
+          [:script (hiccup/raw-string cost-script)]])
         response/response
         (response/content-type "text/html; charset=utf-8"))))
 
