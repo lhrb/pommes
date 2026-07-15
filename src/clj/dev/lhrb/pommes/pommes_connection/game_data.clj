@@ -12,8 +12,10 @@
     :positioning-categories [:budget :mainstream :premium]}
 
    :catalog
-   {:sizes {:small {:cost-per-portion 0.55}
-            :large {:cost-per-portion 0.85}}
+   {:sizes {:small {:cost 0.55}
+            :medium {:cost 0.70}
+            :large {:cost 0.85}
+            :extra-large {:cost 1.00}}
     :seasonings {:salt {:cost 0.03}
                  :pommesgewuerz {:cost 0.09}}
     :toppings {:none {:cost 0.00}
@@ -31,7 +33,7 @@
     :starter
     {:interior :classic
      :dishes [{:name "Classic pommes"
-               :pommes {:size :small :portion 1.0 :seasoning :salt}
+               :pommes {:size :small :seasoning :salt}
                :topping :ketchup
                :price 4.0}]}}
 
@@ -49,9 +51,8 @@
       :behavior {:topping-variety-strength 0.20
                  :positioning-variety-strength 0.10}
       :preferences
-      {:weights {:size 0.4 :portion 0.6 :seasoning 0.3 :topping 0.9 :price 1.8 :interior 0.2}
-       :size {:small 0.9 :large 0.5}
-       :portion {:ideal 0.90 :tolerance 0.50}
+      {:weights {:size 1.0 :seasoning 0.3 :topping 0.9 :price 1.8 :interior 0.2}
+       :size {:small 0.9 :medium 0.7 :large 0.5 :extra-large 0.3}
        :seasoning {:salt 0.8 :pommesgewuerz 0.7}
        :topping {:none 0.3 :ketchup 1.0 :mayo 0.7 :ketchup-mayo 0.9 :special 0.4 :sate 0.5}
        :price {:model :cheap :max 5.00 :anchor 4.50 :relative-price-strength 0.25}
@@ -64,9 +65,8 @@
       :behavior {:topping-variety-strength 0.05
                  :positioning-variety-strength 0.03}
       :preferences
-      {:weights {:size 0.5 :portion 0.8 :seasoning 0.4 :topping 0.7 :price 1.0 :interior 0.8}
-       :size {:small 0.7 :large 0.9}
-       :portion {:ideal 1.10 :tolerance 0.50}
+      {:weights {:size 1.3 :seasoning 0.4 :topping 0.7 :price 1.0 :interior 0.8}
+       :size {:small 0.7 :medium 0.8 :large 0.9 :extra-large 1.0}
        :seasoning {:salt 1.0 :pommesgewuerz 0.6}
        :topping {:none 0.5 :ketchup 1.0 :mayo 0.8 :ketchup-mayo 0.9 :special 0.5 :sate 0.2}
        :price {:model :value :ideal 5.50 :tolerance 2.25 :anchor 5.50 :relative-price-strength 0.10}
@@ -79,9 +79,8 @@
       :behavior {:topping-variety-strength 0.35
                  :positioning-variety-strength 0.30}
       :preferences
-      {:weights {:size 0.4 :portion 0.9 :seasoning 0.5 :topping 1.4 :price 1.0 :interior 1.3}
-       :size {:small 1.0 :large 0.3}
-       :portion {:ideal 0.65 :tolerance 0.35}
+      {:weights {:size 1.3 :seasoning 0.5 :topping 1.4 :price 1.0 :interior 1.3}
+       :size {:small 1.0 :medium 0.65 :large 0.3 :extra-large 0.0}
        :seasoning {:salt 0.4 :pommesgewuerz 1.0}
        :topping {:none 0.2 :ketchup 0.1 :mayo 0.2 :ketchup-mayo 0.1 :special 1.0 :sate 0.8}
        :price {:model :status :ideal 9.00 :tolerance 3.00 :anchor 6.00 :status-strength 0.40}

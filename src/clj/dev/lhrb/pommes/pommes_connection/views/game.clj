@@ -3,6 +3,7 @@
    [clojure.string :as str]
    [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
    [dev.lhrb.pommes.pommes-connection.views.layout :as layout]
+   [hiccup.util :as hiccup]
    [ring.util.response :as response]))
 
 (defn setup-options []
@@ -11,6 +12,7 @@
      :sizes (keys (:sizes catalog))
      :seasonings (keys (:seasonings catalog))
      :toppings (keys (:toppings catalog))
+     :catalog catalog
      :dish-count (get-in game-data/game-data [:setup :dish-count])}))
 
 (defn- label [value]
@@ -22,36 +24,50 @@
 (defn- quantity [value]
   (format "%.1f" (double (or value 0.0))))
 
-(defn- select-input [field value options]
+(defn- select-input [field value options cost]
   [:select {:name field :id field}
    (for [option options]
-     [:option {:value (name option) :selected (= option value)} (label option)])])
+     (let [option-cost (when cost (cost option))]
+       [:option (cond-> {:value (name option) :selected (= option value)}
+                  (some? option-cost) (assoc :data-cost (str option-cost)))
+        (str (label option)
+             (when (some? option-cost) (str " (" (money option-cost) ")")))]))])
 
 (defn- text-input [field value attributes]
   [:input (merge {:name field :id field :value (or value "")} attributes)])
 
+(defn- dish-cost [catalog dish]
+  (+ (double (get-in catalog [:sizes (get-in dish [:pommes :size]) :cost] 0.0))
+     (double (get-in catalog [:seasonings (get-in dish [:pommes :seasoning]) :cost] 0.0))
+     (double (get-in catalog [:toppings (:topping dish) :cost] 0.0))))
+
 (defn- dish-field [options index dish errors]
   (let [prefix (str "dish-" index "-")
-        pommes (:pommes dish)]
-    [:fieldset
+        pommes (:pommes dish)
+        catalog (:catalog options)]
+    [:fieldset {:data-dish true}
      [:legend (str "Dish " index)]
      [:div.grid
       [:label {:for (str prefix "name")} "Name"
        (text-input (str prefix "name") (:name dish) {:required true})]
       [:label {:for (str prefix "size")} "Size"
-       (select-input (str prefix "size") (:size pommes) (:sizes options))]
-      [:label {:for (str prefix "portion")} "Portion"
-       (text-input (str prefix "portion") (:portion pommes)
-                   {:type "number" :step "0.1" :min "0.1" :required true})]
+       (select-input (str prefix "size") (:size pommes) (:sizes options)
+                     #(get-in catalog [:sizes % :cost]))]
       [:label {:for (str prefix "seasoning")} "Seasoning"
-       (select-input (str prefix "seasoning") (:seasoning pommes) (:seasonings options))]
+       (select-input (str prefix "seasoning") (:seasoning pommes) (:seasonings options)
+                     #(get-in catalog [:seasonings % :cost]))]
       [:label {:for (str prefix "topping")} "Topping"
-       (select-input (str prefix "topping") (:topping dish) (:toppings options))]
+       (select-input (str prefix "topping") (:topping dish) (:toppings options)
+                     #(get-in catalog [:toppings % :cost]))]
       [:label {:for (str prefix "price")} "Price"
        (text-input (str prefix "price") (:price dish)
                    {:type "number" :step "0.01" :min "0" :required true})]]
+     [:p "Ingredient cost: " [:strong {:data-cost-total true} (money (dish-cost catalog dish))]]
      (when-let [dish-errors (seq (get errors index))]
        [:ul.errors (for [error dish-errors] [:li error])])]))
+
+(def cost-script
+  "document.querySelectorAll(\"[data-dish]\").forEach(function (dish) {\n  const updateCost = function () {\n    const total = Array.from(dish.querySelectorAll(\"select option:checked\")).reduce(function (sum, option) { return sum + Number(option.dataset.cost || 0); }, 0);\n    dish.querySelector(\"[data-cost-total]\").textContent = \"€\" + total.toFixed(2);\n  };\n  dish.querySelectorAll(\"select\").forEach(function (input) { input.addEventListener(\"change\", updateCost); });\n  updateCost();\n});")
 
 (defn- viewer-tick-summary [latest-tick viewer-id]
   (some #(when (= viewer-id (:player-id %)) %) (:players latest-tick)))
@@ -119,11 +135,12 @@
             [:fieldset
              [:legend "Interior"]
              [:label {:for "interior"} "Style"
-              (select-input "interior" (or (:interior form) (:interior viewer)) (:interiors options))]
+              (select-input "interior" (or (:interior form) (:interior viewer)) (:interiors options) nil)]
              (when-let [interior-errors (seq (:interior errors))]
                [:ul.errors (for [error interior-errors] [:li error])])]
             (map-indexed (fn [index dish] (dish-field options (inc index) dish errors)) dishes)
-            [:button {:type "submit"} "Schedule setup"]]]])
+            [:button {:type "submit"} "Schedule setup"]]
+          [:script (hiccup/raw-string cost-script)]]])
         response/response
         (response/content-type "text/html; charset=utf-8"))))
 

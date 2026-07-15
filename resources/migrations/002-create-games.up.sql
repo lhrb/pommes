@@ -24,7 +24,6 @@ CREATE TABLE player_dishes (
   game_player_id INTEGER NOT NULL REFERENCES game_players(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   size TEXT NOT NULL,
-  portion REAL NOT NULL CHECK (portion > 0),
   seasoning TEXT NOT NULL,
   topping TEXT NOT NULL,
   price REAL NOT NULL CHECK (price >= 0)

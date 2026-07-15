@@ -11,7 +11,7 @@
     [integrant.repl.state :as state]
     [kit.api :as kit]
     [lambdaisland.classpath :as licp]
-    [dev.lhrb.pommes.pommes-connection.system :refer [start-app]]))
+    [dev.lhrb.pommes.pommes-connection.system]))
 
 (alter-var-root #'s/*explain-out* (constantly expound/printer))
 
@@ -48,4 +48,5 @@
 (comment
   (go)
   (reset)
+  (halt)
   (update-deps))

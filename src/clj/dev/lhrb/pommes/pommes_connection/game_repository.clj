@@ -108,12 +108,11 @@
     (doseq [dish dishes]
       (jdbc/execute-one! connectable
                          ["INSERT INTO player_dishes
-                           (game_player_id, name, size, portion, seasoning, topping, price)
-                           VALUES (?, ?, ?, ?, ?, ?, ?)"
+                           (game_player_id, name, size, seasoning, topping, price)
+                           VALUES (?, ?, ?, ?, ?, ?)"
                           game-player-id
                           (:name dish)
                           (name (get-in dish [:pommes :size]))
-                          (double (get-in dish [:pommes :portion]))
                           (name (get-in dish [:pommes :seasoning]))
                           (name (:topping dish))
                           (double (:price dish))]
@@ -184,12 +183,11 @@
           {:id (:id row)
            :name (:name row)
            :pommes {:size (keyword (:size row))
-                    :portion (:portion row)
                     :seasoning (keyword (:seasoning row))}
            :topping (keyword (:topping row))
            :price (:price row)})
         (jdbc/execute! connectable
-                       ["SELECT id, name, size, portion, seasoning, topping, price
+                       ["SELECT id, name, size, seasoning, topping, price
                          FROM player_dishes WHERE game_player_id = ? ORDER BY id"
                         game-player-id]
                        query-options)))
@@ -380,11 +378,10 @@
           dish (:dishes player)]
     (jdbc/execute-one! connectable
                        ["INSERT INTO player_dishes
-                         (game_player_id, name, size, portion, seasoning, topping, price)
-                         VALUES (?, ?, ?, ?, ?, ?, ?)"
+                         (game_player_id, name, size, seasoning, topping, price)
+                         VALUES (?, ?, ?, ?, ?, ?)"
                         (:id player) (or (:name dish) (str (:id dish)))
                         (name (get-in dish [:pommes :size]))
-                        (double (get-in dish [:pommes :portion]))
                         (name (get-in dish [:pommes :seasoning]))
                         (name (:topping dish)) (double (:price dish))]
                        query-options))

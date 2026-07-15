@@ -31,10 +31,9 @@
             :eat-rate 0.1
             :outside-option-utility 0.2
             :behavior {}
-            :preferences {:weights {:size 1.0 :portion 1.0 :seasoning 1.0
+            :preferences {:weights {:size 1.0 :seasoning 1.0
                                     :topping 1.0 :price 1.0 :interior 1.0}
                           :size {:small 1.0}
-                          :portion {:ideal 1.0 :tolerance 0.5}
                           :seasoning {:salt 1.0}
                           :topping {:ketchup 1.0}
                           :price {:model :cheap :max 8.0}
@@ -91,21 +90,21 @@
                               :player-id player-id
                               :interior :classic
                               :dishes [{:name "Classic"
-                                        :pommes {:size :small :portion 1.0 :seasoning :salt}
+                                        :pommes {:size :small :seasoning :salt}
                                         :topping :ketchup
                                         :price 4.0}]})]
         (game-repository/schedule-setup!
          datasource game-player-id
          {:interior :punk
           :dishes [{:name "Punk special"
-                    :pommes {:size :small :portion 1.1 :seasoning :salt}
+                    :pommes {:size :small :seasoning :salt}
                     :topping :ketchup
                     :price 5.0}]})
         (game-repository/schedule-setup!
          datasource game-player-id
          {:interior :punk
           :dishes [{:name "Punk special"
-                    :pommes {:size :small :portion 1.1 :seasoning :salt}
+                    :pommes {:size :small :seasoning :salt}
                     :topping :ketchup
                     :price 5.5}]})
         (game-tick/run-next-tick! datasource game-id simulation-config)
@@ -144,20 +143,17 @@
                         :session {:game-token game-token :game-player-id game-player-id}
                         :params {:interior "modern"
                                  :dish-1-name "Budget"
-                                 :dish-1-size "small"
-                                 :dish-1-portion "0.9"
+                                 :dish-1-size "medium"
                                  :dish-1-seasoning "salt"
                                  :dish-1-topping "ketchup"
                                  :dish-1-price "3.5"
                                  :dish-2-name "Family"
-                                 :dish-2-size "large"
-                                 :dish-2-portion "1.1"
+                                 :dish-2-size "extra-large"
                                  :dish-2-seasoning "salt"
                                  :dish-2-topping "mayo"
                                  :dish-2-price "5.0"
                                  :dish-3-name "Special"
                                  :dish-3-size "large"
-                                 :dish-3-portion "1.0"
                                  :dish-3-seasoning "pommesgewuerz"
                                  :dish-3-topping "special"
                                  :dish-3-price "6.0"}})]
@@ -177,6 +173,8 @@
           (is (= 200 (:status page-response)))
           (is (re-find #"Current demographics" (:body page-response)))
           (is (re-find #"Sales by demographic" (:body page-response)))
+          (is (re-find #"Extra large \(€1\.00\)" (:body page-response)))
+          (is (re-find #"Ingredient cost" (:body page-response)))
           (is (= 400 (:status invalid-setup-response)))
           (is (re-find #"Name is required" (:body invalid-setup-response)))
           (is (= 302 (:status setup-response)))
@@ -281,20 +279,17 @@
                        :params {"__anti-forgery-token" setup-token
                                 "interior" "modern"
                                 "dish-1-name" "Budget"
-                                "dish-1-size" "small"
-                                "dish-1-portion" "0.9"
+                                "dish-1-size" "medium"
                                 "dish-1-seasoning" "salt"
                                 "dish-1-topping" "ketchup"
                                 "dish-1-price" "3.5"
                                 "dish-2-name" "Family"
-                                "dish-2-size" "large"
-                                "dish-2-portion" "1.1"
+                                "dish-2-size" "extra-large"
                                 "dish-2-seasoning" "salt"
                                 "dish-2-topping" "mayo"
                                 "dish-2-price" "5.0"
                                 "dish-3-name" "Special"
                                 "dish-3-size" "large"
-                                "dish-3-portion" "1.0"
                                 "dish-3-seasoning" "pommesgewuerz"
                                 "dish-3-topping" "special"
                                 "dish-3-price" "6.0"})]

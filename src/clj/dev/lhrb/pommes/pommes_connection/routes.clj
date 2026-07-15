@@ -25,7 +25,6 @@
         options (game-view/setup-options)]
     {:name (get params (keyword (str prefix "name")))
      :pommes {:size (choice (get params (keyword (str prefix "size"))) (:sizes options))
-              :portion (get params (keyword (str prefix "portion")))
               :seasoning (choice (get params (keyword (str prefix "seasoning"))) (:seasonings options))}
      :topping (choice (get params (keyword (str prefix "topping"))) (:toppings options))
      :price (get params (keyword (str prefix "price")))}))
@@ -38,14 +37,12 @@
         (into {}
               (keep-indexed
                (fn [index dish]
-                 (let [portion (number (get-in dish [:pommes :portion]))
-                       price (number (:price dish))
+                 (let [price (number (:price dish))
                        errors (cond-> []
                                 (str/blank? (:name dish)) (conj "Name is required.")
                                 (nil? (get-in dish [:pommes :size])) (conj "Choose a valid size.")
                                 (nil? (get-in dish [:pommes :seasoning])) (conj "Choose a valid seasoning.")
                                 (nil? (:topping dish)) (conj "Choose a valid topping.")
-                                (or (nil? portion) (not (pos? portion))) (conj "Portion must be greater than zero.")
                                 (or (nil? price) (neg? price)) (conj "Price must be zero or greater."))]
                    (when (seq errors) [(inc index) errors])))
                dishes))
@@ -58,8 +55,6 @@
                :dishes (mapv (fn [dish]
                                 (-> dish
                                     (update :name str/trim)
-                                    (assoc-in [:pommes :portion]
-                                              (number (get-in dish [:pommes :portion])))
                                     (assoc :price (number (:price dish)))))
                               dishes)})}))
 

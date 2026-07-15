@@ -109,12 +109,10 @@
 
 (defn dish-cost
   [catalog {:keys [pommes topping]}]
-  (+ (* (double
-          (get-in catalog
-                  [:sizes (:size pommes) :cost-per-portion]
-                  0.0))
-        (double
-          (:portion pommes)))
+  (+ (double
+      (get-in catalog
+              [:sizes (:size pommes) :cost]
+              0.0))
 
      (double
        (get-in catalog
@@ -211,16 +209,6 @@
        (get-in preferences
                [:size (:size pommes)]
                0.0))
-
-     :portion
-     (closeness
-       (:portion pommes)
-       (get-in preferences
-               [:portion :ideal]
-               1.0)
-       (get-in preferences
-               [:portion :tolerance]
-               0.5))
 
      :seasoning
      (double
@@ -885,7 +873,7 @@
         (fnil + 0.0)
         (:profit stats))
 
-      ;; Every sold portion produces one prestige.
+      ;; Every sold dish produces one prestige.
       (update
         :prestige
         (fnil + 0.0)
@@ -1191,8 +1179,7 @@
 
       :preferences
       {:weights
-       {:size 0.4
-        :portion 0.6
+       {:size 1.0
         :seasoning 0.3
         :topping 0.9
         :price 1.8
@@ -1200,11 +1187,9 @@
 
        :size
        {:small 0.9
-        :large 0.5}
-
-       :portion
-       {:ideal 0.90
-        :tolerance 0.50}
+        :medium 0.7
+        :large 0.5
+        :extra-large 0.3}
 
        :seasoning
        {:salt 0.8
@@ -1240,8 +1225,7 @@
 
       :preferences
       {:weights
-       {:size 0.5
-        :portion 0.8
+       {:size 1.3
         :seasoning 0.4
         :topping 0.7
         :price 1.0
@@ -1249,11 +1233,9 @@
 
        :size
        {:small 0.7
-        :large 0.9}
-
-       :portion
-       {:ideal 1.10
-        :tolerance 0.50}
+        :medium 0.8
+        :large 0.9
+        :extra-large 1.0}
 
        :seasoning
        {:salt 1.0
@@ -1291,21 +1273,18 @@
 
       :preferences
       {:weights
-       {:size 0.4
-        :portion 0.9
+       {:size 1.3
         :seasoning 0.5
         :topping 1.4
         :price 1.0
         :interior 1.3}
 
-       ;; Small portions can be a feature rather than a weakness.
+       ;; Smaller servings can be a feature rather than a weakness.
        :size
        {:small 1.0
-        :large 0.3}
-
-       :portion
-       {:ideal 0.65
-        :tolerance 0.35}
+        :medium 0.65
+        :large 0.3
+        :extra-large 0.0}
 
        :seasoning
        {:salt 0.4
@@ -1349,7 +1328,6 @@
      [{:id :cheap-ketchup
        :pommes
        {:size :small
-        :portion 0.90
         :seasoning :salt}
        :topping :ketchup
        :price 3.50}
@@ -1357,7 +1335,6 @@
       {:id :large-mayo
        :pommes
        {:size :large
-        :portion 1.15
         :seasoning :pommesgewuerz}
        :topping :mayo
        :price 5.20}
@@ -1365,7 +1342,6 @@
       {:id :special
        :pommes
        {:size :large
-        :portion 1.00
         :seasoning :pommesgewuerz}
        :topping :special
        :price 6.00}]}
@@ -1386,7 +1362,6 @@
      [{:id :classic
        :pommes
        {:size :large
-        :portion 1.00
         :seasoning :salt}
        :topping :ketchup-mayo
        :price 4.80}
@@ -1394,7 +1369,6 @@
       {:id :kids
        :pommes
        {:size :small
-        :portion 0.80
         :seasoning :salt}
        :topping :ketchup
        :price 3.80}
@@ -1402,7 +1376,6 @@
       {:id :sate
        :pommes
        {:size :large
-        :portion 1.10
         :seasoning :pommesgewuerz}
        :topping :sate
        :price 6.50}]}
@@ -1418,7 +1391,6 @@
      [{:id :micro-special
        :pommes
        {:size :small
-        :portion 0.60
         :seasoning :pommesgewuerz}
        :topping :special
        :price 9.00}
@@ -1426,7 +1398,6 @@
       {:id :sate-edition
        :pommes
        {:size :small
-        :portion 0.70
         :seasoning :pommesgewuerz}
        :topping :sate
        :price 8.50}
@@ -1434,7 +1405,6 @@
       {:id :normal-ketchup
        :pommes
        {:size :small
-        :portion 0.90
         :seasoning :salt}
        :topping :ketchup
        :price 4.50}]}]}))
@@ -1444,18 +1414,18 @@
    {:tick 0
     :players
     [{:id :fritza :money 20.0 :prestige 0.0 :interior :punk :market-modifiers {} :effects []
-      :dishes [{:id :cheap-ketchup :pommes {:size :small :portion 0.90 :seasoning :salt} :topping :ketchup :price 3.50}
-               {:id :large-mayo :pommes {:size :large :portion 1.15 :seasoning :pommesgewuerz} :topping :mayo :price 5.20}
-               {:id :special :pommes {:size :large :portion 1.00 :seasoning :pommesgewuerz} :topping :special :price 6.00}]}
+      :dishes [{:id :cheap-ketchup :pommes {:size :small :seasoning :salt} :topping :ketchup :price 3.50}
+               {:id :large-mayo :pommes {:size :large :seasoning :pommesgewuerz} :topping :mayo :price 5.20}
+               {:id :special :pommes {:size :large :seasoning :pommesgewuerz} :topping :special :price 6.00}]}
      {:id :goldene-gabel :money 20.0 :prestige 0.0 :interior :classic :market-modifiers {}
       :effects [{:kind :rats :utility -0.20 :ticks-left 1}]
-      :dishes [{:id :classic :pommes {:size :large :portion 1.00 :seasoning :salt} :topping :ketchup-mayo :price 4.80}
-               {:id :kids :pommes {:size :small :portion 0.80 :seasoning :salt} :topping :ketchup :price 3.80}
-               {:id :sate :pommes {:size :large :portion 1.10 :seasoning :pommesgewuerz} :topping :sate :price 6.50}]}
+      :dishes [{:id :classic :pommes {:size :large :seasoning :salt} :topping :ketchup-mayo :price 4.80}
+               {:id :kids :pommes {:size :small :seasoning :salt} :topping :ketchup :price 3.80}
+               {:id :sate :pommes {:size :large :seasoning :pommesgewuerz} :topping :sate :price 6.50}]}
      {:id :pommes-lab :money 20.0 :prestige 0.0 :interior :modern :market-modifiers {} :effects []
-      :dishes [{:id :micro-special :pommes {:size :small :portion 0.60 :seasoning :pommesgewuerz} :topping :special :price 9.00}
-               {:id :sate-edition :pommes {:size :small :portion 0.70 :seasoning :pommesgewuerz} :topping :sate :price 8.50}
-               {:id :normal-ketchup :pommes {:size :small :portion 0.90 :seasoning :salt} :topping :ketchup :price 4.50}]}]}
+      :dishes [{:id :micro-special :pommes {:size :small :seasoning :pommesgewuerz} :topping :special :price 9.00}
+               {:id :sate-edition :pommes {:size :small :seasoning :pommesgewuerz} :topping :sate :price 8.50}
+               {:id :normal-ketchup :pommes {:size :small :seasoning :salt} :topping :ketchup :price 4.50}]}]}
    (game-data/simulation-config)))
 
 (comment
