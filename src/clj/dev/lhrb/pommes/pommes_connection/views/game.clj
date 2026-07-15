@@ -1,13 +1,17 @@
 (ns dev.lhrb.pommes.pommes-connection.views.game
   (:require
    [clojure.string :as str]
+   [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
    [dev.lhrb.pommes.pommes-connection.views.layout :as layout]
    [ring.util.response :as response]))
 
-(def interiors [:classic :modern :punk])
-(def sizes [:small :large])
-(def seasonings [:salt :pommesgewuerz])
-(def toppings [:none :ketchup :mayo :ketchup-mayo :special :sate])
+(defn setup-options []
+  (let [catalog (:catalog game-data/game-data)]
+    {:interiors (keys (:interiors catalog))
+     :sizes (keys (:sizes catalog))
+     :seasonings (keys (:seasonings catalog))
+     :toppings (keys (:toppings catalog))
+     :dish-count (get-in game-data/game-data [:setup :dish-count])}))
 
 (defn- label [value]
   (-> value name (str/replace #"-" " ") str/capitalize))
@@ -26,7 +30,7 @@
 (defn- text-input [field value attributes]
   [:input (merge {:name field :id field :value (or value "")} attributes)])
 
-(defn- dish-field [index dish errors]
+(defn- dish-field [options index dish errors]
   (let [prefix (str "dish-" index "-")
         pommes (:pommes dish)]
     [:fieldset
@@ -35,14 +39,14 @@
       [:label {:for (str prefix "name")} "Name"
        (text-input (str prefix "name") (:name dish) {:required true})]
       [:label {:for (str prefix "size")} "Size"
-       (select-input (str prefix "size") (:size pommes) sizes)]
+       (select-input (str prefix "size") (:size pommes) (:sizes options))]
       [:label {:for (str prefix "portion")} "Portion"
        (text-input (str prefix "portion") (:portion pommes)
                    {:type "number" :step "0.1" :min "0.1" :required true})]
       [:label {:for (str prefix "seasoning")} "Seasoning"
-       (select-input (str prefix "seasoning") (:seasoning pommes) seasonings)]
+       (select-input (str prefix "seasoning") (:seasoning pommes) (:seasonings options))]
       [:label {:for (str prefix "topping")} "Topping"
-       (select-input (str prefix "topping") (:topping dish) toppings)]
+       (select-input (str prefix "topping") (:topping dish) (:toppings options))]
       [:label {:for (str prefix "price")} "Price"
        (text-input (str prefix "price") (:price dish)
                    {:type "number" :step "0.01" :min "0" :required true})]]
@@ -54,8 +58,9 @@
 
 (defn page
   [{:keys [game viewer players city latest-tick form errors scheduled-for anti-forgery-token]}]
-  (let [viewer-result (viewer-tick-summary latest-tick (:id viewer))
-        dishes (take 3 (concat (or (:dishes form) (:dishes viewer)) (repeat {})))]
+  (let [options (setup-options)
+        viewer-result (viewer-tick-summary latest-tick (:id viewer))
+        dishes (take (:dish-count options) (concat (or (:dishes form) (:dishes viewer)) (repeat {})))]
     (-> (layout/page
          (str (:name game) " | Pommes Connection")
          [:main
@@ -114,10 +119,10 @@
             [:fieldset
              [:legend "Interior"]
              [:label {:for "interior"} "Style"
-              (select-input "interior" (or (:interior form) (:interior viewer)) interiors)]
+              (select-input "interior" (or (:interior form) (:interior viewer)) (:interiors options))]
              (when-let [interior-errors (seq (:interior errors))]
                [:ul.errors (for [error interior-errors] [:li error])])]
-            (map-indexed (fn [index dish] (dish-field (inc index) dish errors)) dishes)
+            (map-indexed (fn [index dish] (dish-field options (inc index) dish errors)) dishes)
             [:button {:type "submit"} "Schedule setup"]]]])
         response/response
         (response/content-type "text/html; charset=utf-8"))))

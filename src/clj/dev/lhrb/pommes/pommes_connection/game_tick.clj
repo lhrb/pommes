@@ -1,11 +1,12 @@
 (ns dev.lhrb.pommes.pommes-connection.game-tick
   (:require
    [dev.lhrb.pommes.pommes-connection.game-repository :as game-repository]
+   [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
    [dev.lhrb.pommes.pommes-connection.simulation :as simulation]
    [next.jdbc :as jdbc]))
 
 (def default-simulation-config
-  (select-keys simulation/sample-state [:rules :city]))
+  (game-data/simulation-config))
 
 (defn- setup-dishes
   [dishes]

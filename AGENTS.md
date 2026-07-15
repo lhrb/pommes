@@ -23,4 +23,6 @@ Clojure.
 - Prefer plain SQL over query-building abstractions initially.
 - Write example usage code in (comment ) block at the end of files
 - Do not add dependencies unless they solve an immediate need.
+- prefer (comment ) example over tests
+- test should be minimal and as significant as possible
 

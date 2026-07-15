@@ -2,6 +2,7 @@
   (:require
    [clojure.edn :as edn]
    [clojure.string :as str]
+   [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
    [next.jdbc :as jdbc]
    [next.jdbc.result-set :as rs])
   (:import
@@ -28,13 +29,6 @@
 (def ^:private token-alphabet "0123456789ABCDEFGHJKMNPQRSTVWXYZ")
 (def ^:private secure-random (SecureRandom.))
 (def ^:private password-iterations 600000)
-(def ^:private starter-setup
-  {:interior :classic
-   :dishes [{:name "Classic pommes"
-             :pommes {:size :small :portion 1.0 :seasoning :salt}
-             :topping :ketchup
-             :price 4.0}]})
-
 (defn normalize-token [token]
   (some-> token str/trim str/upper-case))
 
@@ -144,7 +138,7 @@
     (enable-foreign-keys! tx)
     (let [game (insert-game! tx game-name)
           player-id (insert-player! tx (:id game) player-name password)
-          game-player-id (add-game-player! tx (assoc starter-setup
+          game-player-id (add-game-player! tx (assoc (game-data/starter-setup)
                                                       :game-id (:id game)
                                                       :player-id player-id
                                                       :player-name player-name))]
@@ -162,7 +156,7 @@
         (nil? game) {:error :game-not-found}
         (player-name-in-use? tx (:id game) player-name) {:error :player-name-taken :game game}
         :else (let [player-id (insert-player! tx (:id game) player-name password)
-                    game-player-id (add-game-player! tx (assoc starter-setup
+                    game-player-id (add-game-player! tx (assoc (game-data/starter-setup)
                                                                 :game-id (:id game)
                                                                 :player-id player-id
                                                                 :player-name player-name))]

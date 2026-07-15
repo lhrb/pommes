@@ -1,28 +1,10 @@
-(ns dev.lhrb.pommes.pommes-connection.simulation)
+(ns dev.lhrb.pommes.pommes-connection.simulation
+  (:require
+   [dev.lhrb.pommes.pommes-connection.game-data :as game-data]))
 
 ;; Sales are expected values. Fractional sales are intentional.
 ;; With a 30-second tick this is simpler and less noisy than simulating
 ;; individual customers.
-
-(def costs
-  {:size
-   {:small 0.55
-    :large 0.85}
-
-   :seasoning
-   {:salt 0.03
-    :pommesgewuerz 0.09}
-
-   :topping
-   {:none 0.00
-    :ketchup 0.12
-    :mayo 0.16
-    :ketchup-mayo 0.25
-    :special 0.55
-    :sate 0.60}})
-
-(def positioning-categories
-  [:budget :mainstream :premium])
 
 ;; ---------------------------------------------------------------------------
 ;; Numeric helpers
@@ -126,28 +108,28 @@
 ;; ---------------------------------------------------------------------------
 
 (defn dish-cost
-  [{:keys [pommes topping]}]
+  [catalog {:keys [pommes topping]}]
   (+ (* (double
-          (get-in costs
-                  [:size (:size pommes)]
+          (get-in catalog
+                  [:sizes (:size pommes) :cost-per-portion]
                   0.0))
         (double
           (:portion pommes)))
 
      (double
-       (get-in costs
-               [:seasoning (:seasoning pommes)]
+       (get-in catalog
+               [:seasonings (:seasoning pommes) :cost]
                0.0))
 
      (double
-       (get-in costs
-               [:topping topping]
+       (get-in catalog
+               [:toppings topping :cost]
                0.0))))
 
 (defn dish-margin
-  [dish]
+  [catalog dish]
   (- (double (:price dish))
-     (dish-cost dish)))
+     (dish-cost catalog dish)))
 
 ;; ---------------------------------------------------------------------------
 ;; Base demographic preferences
@@ -492,7 +474,7 @@
 
         target
         (/ 1.0
-           (count positioning-categories))
+           (count (:positioning-categories rules)))
 
         current
         (recent-share
@@ -731,7 +713,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn allocate-choice
-  [demographic demand choice]
+  [catalog demographic demand choice]
   (let [sales
         (* demand
            (double (:share choice)))
@@ -757,12 +739,12 @@
           :topping (:topping dish)
           :positioning (:positioning choice)
           :price (double (:price dish))
-          :unit-cost (dish-cost dish)
-          :unit-margin (dish-margin dish)
+          :unit-cost (dish-cost catalog dish)
+          :unit-margin (dish-margin catalog dish)
           :revenue (* sales
                       (double (:price dish)))
           :profit (* sales
-                     (dish-margin dish))))
+                     (dish-margin catalog dish))))
 
       (assoc
         base
@@ -770,7 +752,7 @@
         :profit 0.0))))
 
 (defn simulate-demographic
-  [rules market players demographic]
+  [rules catalog market players demographic]
   (let [potential-demand
         (* (double (:population demographic))
            (double (:eat-rate demographic)))
@@ -802,7 +784,7 @@
         allocations
         (mapv
           #(allocate-choice
-             demographic
+             catalog demographic
              potential-demand
              %)
           choices)
@@ -1023,7 +1005,7 @@
 
         observed-positioning
         (observed-share-map
-          positioning-categories
+          (:positioning-categories rules)
           purchases
           :positioning)
 
@@ -1062,7 +1044,7 @@
                     {})
             observed-positioning
             alpha
-            positioning-categories))
+            (:positioning-categories rules)))
 
         (assoc-in
           [:price-anchors
@@ -1101,6 +1083,7 @@
 (defn simulate-tick
   [{:keys [tick
            city
+           catalog
            players
            rules
            market]
@@ -1113,7 +1096,7 @@
         results
         (mapv
           #(simulate-demographic
-             rules
+             rules catalog
              (or market {})
              players
              %)
@@ -1164,6 +1147,7 @@
 ;; Sample game
 ;; ---------------------------------------------------------------------------
 
+(comment
 (def sample-state
   {:tick 0
 
@@ -1453,7 +1437,26 @@
         :portion 0.90
         :seasoning :salt}
        :topping :ketchup
-       :price 4.50}]}]})
+       :price 4.50}]}]}))
+
+(def sample-state
+  (merge
+   {:tick 0
+    :players
+    [{:id :fritza :money 20.0 :prestige 0.0 :interior :punk :market-modifiers {} :effects []
+      :dishes [{:id :cheap-ketchup :pommes {:size :small :portion 0.90 :seasoning :salt} :topping :ketchup :price 3.50}
+               {:id :large-mayo :pommes {:size :large :portion 1.15 :seasoning :pommesgewuerz} :topping :mayo :price 5.20}
+               {:id :special :pommes {:size :large :portion 1.00 :seasoning :pommesgewuerz} :topping :special :price 6.00}]}
+     {:id :goldene-gabel :money 20.0 :prestige 0.0 :interior :classic :market-modifiers {}
+      :effects [{:kind :rats :utility -0.20 :ticks-left 1}]
+      :dishes [{:id :classic :pommes {:size :large :portion 1.00 :seasoning :salt} :topping :ketchup-mayo :price 4.80}
+               {:id :kids :pommes {:size :small :portion 0.80 :seasoning :salt} :topping :ketchup :price 3.80}
+               {:id :sate :pommes {:size :large :portion 1.10 :seasoning :pommesgewuerz} :topping :sate :price 6.50}]}
+     {:id :pommes-lab :money 20.0 :prestige 0.0 :interior :modern :market-modifiers {} :effects []
+      :dishes [{:id :micro-special :pommes {:size :small :portion 0.60 :seasoning :pommesgewuerz} :topping :special :price 9.00}
+               {:id :sate-edition :pommes {:size :small :portion 0.70 :seasoning :pommesgewuerz} :topping :sate :price 8.50}
+               {:id :normal-ketchup :pommes {:size :small :portion 0.90 :seasoning :salt} :topping :ketchup :price 4.50}]}]}
+   (game-data/simulation-config)))
 
 (comment
   ;; Simulate one 30-second tick.

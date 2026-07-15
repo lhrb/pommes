@@ -3,6 +3,7 @@
    [clojure.edn :as edn]
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]
+   [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
    [dev.lhrb.pommes.pommes-connection.game-repository :as game-repository]
    [dev.lhrb.pommes.pommes-connection.game-tick :as game-tick]
    [dev.lhrb.pommes.pommes-connection.routes]
@@ -20,8 +21,10 @@
 (def query-options {:builder-fn rs/as-unqualified-kebab-maps})
 
 (def simulation-config
-  {:rules {:choice-beta 3.0
-           :market-memory-alpha 0.1}
+  (merge game-data/game-data
+         {:rules (merge (:rules game-data/game-data)
+                        {:choice-beta 3.0
+                         :market-memory-alpha 0.1})
    :city {:demographics
           [{:id :locals
             :population 100
@@ -35,7 +38,7 @@
                           :seasoning {:salt 1.0}
                           :topping {:ketchup 1.0}
                           :price {:model :cheap :max 8.0}
-                          :interior {:classic 1.0 :punk 1.0}}}]}})
+                          :interior {:classic 1.0 :punk 1.0}}}]}}))
 
 (defn- anti-forgery-token [body]
   (second (re-find #"name=\"__anti-forgery-token\"[^>]*value=\"([^\"]+)\"" body)))

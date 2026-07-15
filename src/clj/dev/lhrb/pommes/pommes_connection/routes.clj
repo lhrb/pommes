@@ -21,17 +21,19 @@
     (catch Exception _ nil)))
 
 (defn- dish-form [params index]
-  (let [prefix (str "dish-" index "-")]
+  (let [prefix (str "dish-" index "-")
+        options (game-view/setup-options)]
     {:name (get params (keyword (str prefix "name")))
-     :pommes {:size (choice (get params (keyword (str prefix "size"))) game-view/sizes)
+     :pommes {:size (choice (get params (keyword (str prefix "size"))) (:sizes options))
               :portion (get params (keyword (str prefix "portion")))
-              :seasoning (choice (get params (keyword (str prefix "seasoning"))) game-view/seasonings)}
-     :topping (choice (get params (keyword (str prefix "topping"))) game-view/toppings)
+              :seasoning (choice (get params (keyword (str prefix "seasoning"))) (:seasonings options))}
+     :topping (choice (get params (keyword (str prefix "topping"))) (:toppings options))
      :price (get params (keyword (str prefix "price")))}))
 
 (defn- setup-from-params [params]
-  (let [dishes (mapv #(dish-form params %) (range 1 4))
-        interior (choice (:interior params) game-view/interiors)
+  (let [options (game-view/setup-options)
+        dishes (mapv #(dish-form params %) (range 1 (inc (:dish-count options))))
+        interior (choice (:interior params) (:interiors options))
         dish-errors
         (into {}
               (keep-indexed

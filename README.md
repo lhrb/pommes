@@ -16,6 +16,14 @@ By default, SQLite stores its database at `data/pommes-connection.db`. Set
 
 System configuration is available under `resources/system.edn`.
 
+## Game data
+
+All editable game parameters live in
+`src/clj/dev/lhrb/pommes/pommes_connection/game_data.clj`. Its `game-data` map
+contains the catalog, costs, demographics, rules, setup limit, and starter
+setup. Reload the app after editing it; existing games use the updated values
+on their next page load and tick.
+
 To reload changes:
 
 ```clojure
