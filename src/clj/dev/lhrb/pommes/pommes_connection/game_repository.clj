@@ -101,6 +101,56 @@
                        :dishes (load-dishes connectable (:id player))})
                     players)}))))
 
+(defn load-player-game-overview
+  "Loads the persisted state needed by one player's game page.
+
+  Returns nil when the game-player is not part of the requested game."
+  [connectable game-id game-player-id simulation-config]
+  (let [game-player
+        (jdbc/execute-one! connectable
+                           ["SELECT game_players.id, game_players.money,
+                                    game_players.prestige, game_players.interior,
+                                    game_players.active_effects, players.name AS player_name
+                              FROM game_players
+                              JOIN players ON players.id = game_players.player_id
+                              WHERE game_players.game_id = ? AND game_players.id = ?"
+                            game-id game-player-id]
+                           query-options)]
+    (when game-player
+      (let [game (jdbc/execute-one! connectable
+                                    ["SELECT id, name, tick FROM games WHERE id = ?" game-id]
+                                    query-options)
+            players (jdbc/execute! connectable
+                                  ["SELECT game_players.id, players.name AS player_name,
+                                           game_players.money, game_players.prestige
+                                    FROM game_players
+                                    JOIN players ON players.id = game_players.player_id
+                                    WHERE game_players.game_id = ?
+                                    ORDER BY game_players.id"
+                                   game-id]
+                                  query-options)
+            latest-tick (jdbc/execute-one! connectable
+                                           ["SELECT tick, summary
+                                             FROM game_ticks
+                                             WHERE game_id = ?
+                                             ORDER BY tick DESC
+                                             LIMIT 1"
+                                            game-id]
+                                           query-options)]
+        {:game game
+         :viewer {:id (:id game-player)
+                  :name (:player-name game-player)
+                  :money (:money game-player)
+                  :prestige (:prestige game-player)
+                  :interior (keyword (:interior game-player))
+                  :effects (decode (:active-effects game-player))
+                  :dishes (load-dishes connectable (:id game-player))}
+         :players (mapv #(assoc % :name (:player-name %)) players)
+         :city (:city simulation-config)
+         :latest-tick (when latest-tick
+                        (assoc (decode (:summary latest-tick))
+                               :tick (:tick latest-tick)))}))))
+
 (defn schedule-setup!
   [datasource game-player-id setup]
   (jdbc/with-transaction [tx datasource]

@@ -38,6 +38,7 @@
             :sales (:sales last-tick)
             :revenue (:revenue last-tick)
             :profit (:profit last-tick)
+            :demographic-sales (:demographic-sales last-tick)
             :money money
             :prestige prestige})
          (:players state))})

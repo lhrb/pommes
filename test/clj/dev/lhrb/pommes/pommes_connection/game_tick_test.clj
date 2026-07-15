@@ -4,9 +4,12 @@
    [clojure.test :refer [deftest is]]
    [dev.lhrb.pommes.pommes-connection.game-repository :as game-repository]
    [dev.lhrb.pommes.pommes-connection.game-tick :as game-tick]
+   [dev.lhrb.pommes.pommes-connection.routes]
+   [integrant.core :as ig]
    [migratus.core :as migratus]
    [next.jdbc :as jdbc]
-   [next.jdbc.result-set :as rs])
+   [next.jdbc.result-set :as rs]
+   [reitit.ring :as ring])
   (:import
    [java.nio.file Files]))
 
@@ -81,7 +84,39 @@
                                          query-options)
               history (jdbc/execute-one! datasource
                                           ["SELECT tick, summary FROM game_ticks WHERE game_id = ?" game-id]
-                                          query-options)]
+                                          query-options)
+              overview (game-repository/load-player-game-overview
+                        datasource game-id game-player-id simulation-config)
+              handler (ring/ring-handler
+                       (ig/init-key :app/routes {:datasource datasource}))
+              page-response (handler {:request-method :get
+                                      :uri (str "/games/" game-id "/players/" game-player-id)})
+              invalid-setup-response
+              (handler {:request-method :post
+                        :uri (str "/games/" game-id "/players/" game-player-id "/setup")
+                        :params {"interior" "invalid"}})
+              setup-response
+              (handler {:request-method :post
+                        :uri (str "/games/" game-id "/players/" game-player-id "/setup")
+                        :params {"interior" "modern"
+                                 "dish-1-name" "Budget"
+                                 "dish-1-size" "small"
+                                 "dish-1-portion" "0.9"
+                                 "dish-1-seasoning" "salt"
+                                 "dish-1-topping" "ketchup"
+                                 "dish-1-price" "3.5"
+                                 "dish-2-name" "Family"
+                                 "dish-2-size" "large"
+                                 "dish-2-portion" "1.1"
+                                 "dish-2-seasoning" "salt"
+                                 "dish-2-topping" "mayo"
+                                 "dish-2-price" "5.0"
+                                 "dish-3-name" "Special"
+                                 "dish-3-size" "large"
+                                 "dish-3-portion" "1.0"
+                                 "dish-3-seasoning" "pommesgewuerz"
+                                 "dish-3-topping" "special"
+                                 "dish-3-price" "6.0"}})]
           (is (= 1 (:tick game)))
           (is (= "punk" (:interior player)))
           (is (= "Punk special" (:name dish)))
@@ -89,6 +124,19 @@
           (is (zero? (:count queued)))
           (is (= 1 (:tick history)))
           (is (= game-player-id
-                 (get-in (edn/read-string (:summary history)) [:players 0 :player-id])))))
+                 (get-in (edn/read-string (:summary history)) [:players 0 :player-id])))
+          (is (= {:locals (get-in (edn/read-string (:summary history))
+                                  [:players 0 :demographic-sales :locals])}
+                 (get-in overview [:latest-tick :players 0 :demographic-sales])))
+          (is (= "Ada" (get-in overview [:players 0 :name])))
+          (is (= "Punk special" (get-in overview [:viewer :dishes 0 :name])))
+          (is (= 200 (:status page-response)))
+          (is (re-find #"Current demographics" (:body page-response)))
+          (is (re-find #"Sales by demographic" (:body page-response)))
+          (is (= 400 (:status invalid-setup-response)))
+          (is (re-find #"Name is required" (:body invalid-setup-response)))
+          (is (= 302 (:status setup-response)))
+          (is (= (str "/games/" game-id "/players/" game-player-id "?scheduled-for=2")
+                 (get-in setup-response [:headers "Location"])))))
       (finally
         (Files/deleteIfExists database-file)))))
