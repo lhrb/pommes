@@ -6,10 +6,13 @@
    [dev.lhrb.pommes.pommes-connection.game-repository :as game-repository]
    [dev.lhrb.pommes.pommes-connection.game-tick :as game-tick]
    [dev.lhrb.pommes.pommes-connection.routes]
+   [dev.lhrb.pommes.pommes-connection.web :as web]
    [integrant.core :as ig]
    [migratus.core :as migratus]
    [next.jdbc :as jdbc]
    [next.jdbc.result-set :as rs]
+   [peridot.core :as p]
+   [ring.middleware.defaults :as defaults]
    [reitit.ring :as ring])
   (:import
    [java.nio.file Files]))
@@ -33,6 +36,9 @@
                           :topping {:ketchup 1.0}
                           :price {:model :cheap :max 8.0}
                           :interior {:classic 1.0 :punk 1.0}}}]}})
+
+(defn- anti-forgery-token [body]
+  (second (re-find #"name=\"__anti-forgery-token\"[^>]*value=\"([^\"]+)\"" body)))
 
 (deftest queued-setup-is-applied-by-a-persisted-tick
   (let [database-file (Files/createTempFile "pommes-connection-" ".db"
@@ -100,30 +106,30 @@
               (handler {:request-method :post
                         :uri (str "/games/" game-token "/setup")
                         :session {:game-token game-token :game-player-id game-player-id}
-                        :params {"interior" "invalid"}})
+                        :params {:interior "invalid"}})
               setup-response
               (handler {:request-method :post
                         :uri (str "/games/" game-token "/setup")
                         :session {:game-token game-token :game-player-id game-player-id}
-                        :params {"interior" "modern"
-                                 "dish-1-name" "Budget"
-                                 "dish-1-size" "small"
-                                 "dish-1-portion" "0.9"
-                                 "dish-1-seasoning" "salt"
-                                 "dish-1-topping" "ketchup"
-                                 "dish-1-price" "3.5"
-                                 "dish-2-name" "Family"
-                                 "dish-2-size" "large"
-                                 "dish-2-portion" "1.1"
-                                 "dish-2-seasoning" "salt"
-                                 "dish-2-topping" "mayo"
-                                 "dish-2-price" "5.0"
-                                 "dish-3-name" "Special"
-                                 "dish-3-size" "large"
-                                 "dish-3-portion" "1.0"
-                                 "dish-3-seasoning" "pommesgewuerz"
-                                 "dish-3-topping" "special"
-                                 "dish-3-price" "6.0"}})]
+                        :params {:interior "modern"
+                                 :dish-1-name "Budget"
+                                 :dish-1-size "small"
+                                 :dish-1-portion "0.9"
+                                 :dish-1-seasoning "salt"
+                                 :dish-1-topping "ketchup"
+                                 :dish-1-price "3.5"
+                                 :dish-2-name "Family"
+                                 :dish-2-size "large"
+                                 :dish-2-portion "1.1"
+                                 :dish-2-seasoning "salt"
+                                 :dish-2-topping "mayo"
+                                 :dish-2-price "5.0"
+                                 :dish-3-name "Special"
+                                 :dish-3-size "large"
+                                 :dish-3-portion "1.0"
+                                 :dish-3-seasoning "pommesgewuerz"
+                                 :dish-3-topping "special"
+                                 :dish-3-price "6.0"}})]
           (is (= 1 (:tick game)))
           (is (= "punk" (:interior player)))
           (is (= "Punk special" (:name dish)))
@@ -159,9 +165,9 @@
       (let [handler (ring/ring-handler (ig/init-key :app/routes {:datasource datasource}))
             create-response (handler {:request-method :post
                                       :uri "/create-game"
-                                      :params {"game-name" "Lunch rush"
-                                               "player-name" "Ada"
-                                               "player-password" "secret"}})
+                                      :params {:game-name "Lunch rush"
+                                               :player-name "Ada"
+                                               :player-password "secret"}})
             session (:session create-response)
             game-token (:game-token session)
             invite-token (:invite-token (jdbc/execute-one! datasource
@@ -173,16 +179,16 @@
                                     :session session})
             join-response (handler {:request-method :post
                                     :uri (str "/join/" invite-token)
-                                    :params {"player-name" "Bea" "player-password" "another-secret"}})
+                                    :params {:player-name "Bea" :player-password "another-secret"}})
             duplicate-response (handler {:request-method :post
                                          :uri (str "/join/" invite-token)
-                                         :params {"player-name" "Bea" "player-password" "another-secret"}})
+                                         :params {:player-name "Bea" :player-password "another-secret"}})
             login-response (handler {:request-method :post
                                      :uri (str "/login/" (str/lower-case game-token))
-                                     :params {"player-name" "Ada" "player-password" "secret"}})
+                                     :params {:player-name "Ada" :player-password "secret"}})
             invalid-login-response (handler {:request-method :post
                                              :uri (str "/login/" game-token)
-                                             :params {"player-name" "Ada" "player-password" "wrong"}})]
+                                             :params {:player-name "Ada" :player-password "wrong"}})]
         (is (re-matches #"[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{6}" game-token))
         (is (= 302 (:status create-response)))
         (is (= (str "/games/" game-token) (get-in create-response [:headers "Location"])))
@@ -192,5 +198,85 @@
         (is (= 400 (:status duplicate-response)))
         (is (= 302 (:status login-response)))
         (is (= 401 (:status invalid-login-response))))
+      (finally
+        (Files/deleteIfExists database-file)))))
+
+(deftest site-middleware-parses-keyworded-form-params
+  (let [database-file (Files/createTempFile "pommes-connection-web-" ".db"
+                                             (make-array java.nio.file.attribute.FileAttribute 0))
+        datasource (jdbc/get-datasource (str "jdbc:sqlite:" database-file))]
+    (try
+      (migratus/migrate {:store :database
+                         :db {:datasource datasource}
+                         :migration-dir "resources/migrations"})
+      (let [app (-> (ring/ring-handler (ig/init-key :app/routes {:datasource datasource}))
+                    (defaults/wrap-defaults web/site-defaults))
+            create-page (p/request (p/session app) "/create-game" :request-method :get)
+            create-token (anti-forgery-token (get-in create-page [:response :body]))
+            create-response
+            (p/request create-page "/create-game"
+                       :request-method :post
+                       :params {"__anti-forgery-token" create-token
+                                "game-name" "Browser game"
+                                "player-name" "Ada"
+                                "player-password" "secret"})
+            game-token (subs (get-in create-response [:response :headers "Location"])
+                              (count "/games/"))
+            invite-token (:invite-token (jdbc/execute-one! datasource
+                                                        ["SELECT invite_token FROM games WHERE game_token = ?"
+                                                         game-token]
+                                                        query-options))
+            join-page (p/request (p/session app) (str "/join/" invite-token) :request-method :get)
+            join-token (anti-forgery-token (get-in join-page [:response :body]))
+            join-response
+            (p/request join-page (str "/join/" invite-token)
+                       :request-method :post
+                       :params {"__anti-forgery-token" join-token
+                                "player-name" "Bea"
+                                "player-password" "another-secret"})
+            login-page (p/request (p/session app) (str "/login/" game-token) :request-method :get)
+            login-token (anti-forgery-token (get-in login-page [:response :body]))
+            login-response
+            (p/request login-page (str "/login/" game-token)
+                       :request-method :post
+                       :params {"__anti-forgery-token" login-token
+                                "player-name" "Ada"
+                                "player-password" "secret"})
+            game-page (p/follow-redirect create-response)
+            setup-token (anti-forgery-token (get-in game-page [:response :body]))
+            setup-response
+            (p/request game-page (str (get-in game-page [:request :uri]) "/setup")
+                       :request-method :post
+                       :params {"__anti-forgery-token" setup-token
+                                "interior" "modern"
+                                "dish-1-name" "Budget"
+                                "dish-1-size" "small"
+                                "dish-1-portion" "0.9"
+                                "dish-1-seasoning" "salt"
+                                "dish-1-topping" "ketchup"
+                                "dish-1-price" "3.5"
+                                "dish-2-name" "Family"
+                                "dish-2-size" "large"
+                                "dish-2-portion" "1.1"
+                                "dish-2-seasoning" "salt"
+                                "dish-2-topping" "mayo"
+                                "dish-2-price" "5.0"
+                                "dish-3-name" "Special"
+                                "dish-3-size" "large"
+                                "dish-3-portion" "1.0"
+                                "dish-3-seasoning" "pommesgewuerz"
+                                "dish-3-topping" "special"
+                                "dish-3-price" "6.0"})]
+        (is (seq create-token))
+        (is (= 302 (get-in create-response [:response :status])))
+        (is (seq join-token))
+        (is (= 302 (get-in join-response [:response :status])))
+        (is (seq login-token))
+        (is (= 302 (get-in login-response [:response :status])))
+        (is (= 200 (get-in game-page [:response :status])))
+        (is (seq setup-token))
+        (is (= 302 (get-in setup-response [:response :status])))
+        (is (re-find #"\\?scheduled-for=1$"
+                     (get-in setup-response [:response :headers "Location"]))))
       (finally
         (Files/deleteIfExists database-file)))))

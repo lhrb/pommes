@@ -5,3 +5,4 @@
 .lsp/
 log/
 .nrepl-port
+/log/

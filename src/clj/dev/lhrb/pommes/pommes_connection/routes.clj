@@ -22,16 +22,16 @@
 
 (defn- dish-form [params index]
   (let [prefix (str "dish-" index "-")]
-    {:name (get params (str prefix "name"))
-     :pommes {:size (choice (get params (str prefix "size")) game-view/sizes)
-              :portion (get params (str prefix "portion"))
-              :seasoning (choice (get params (str prefix "seasoning")) game-view/seasonings)}
-     :topping (choice (get params (str prefix "topping")) game-view/toppings)
-     :price (get params (str prefix "price"))}))
+    {:name (get params (keyword (str prefix "name")))
+     :pommes {:size (choice (get params (keyword (str prefix "size"))) game-view/sizes)
+              :portion (get params (keyword (str prefix "portion")))
+              :seasoning (choice (get params (keyword (str prefix "seasoning"))) game-view/seasonings)}
+     :topping (choice (get params (keyword (str prefix "topping"))) game-view/toppings)
+     :price (get params (keyword (str prefix "price")))}))
 
 (defn- setup-from-params [params]
   (let [dishes (mapv #(dish-form params %) (range 1 4))
-        interior (choice (get params "interior") game-view/interiors)
+        interior (choice (:interior params) game-view/interiors)
         dish-errors
         (into {}
               (keep-indexed
@@ -66,9 +66,9 @@
                                              game-tick/default-simulation-config))
 
 (defn- form-values [request]
-  {:game-name (some-> (get-in request [:params "game-name"]) str/trim)
-   :player-name (some-> (get-in request [:params "player-name"]) str/trim)
-   :password (get-in request [:params "player-password"])})
+  {:game-name (some-> (get-in request [:params :game-name]) str/trim)
+   :player-name (some-> (get-in request [:params :player-name]) str/trim)
+   :password (get-in request [:params :player-password])})
 
 (defn- valid-entry? [{:keys [game-name player-name password]} game-name-required?]
   (and (or (not game-name-required?) (seq game-name))
@@ -93,7 +93,7 @@
                        game-player-id
                        (overview datasource game-token game-player-id))]
       (game-view/page (assoc data
-                             :scheduled-for (get-in request [:query-params "scheduled-for"])
+                             :scheduled-for (get-in request [:params :scheduled-for])
                              :anti-forgery-token (:anti-forgery-token request)))
       (response/status (response/response "Log in to access this game.") 401))))
 
@@ -153,7 +153,7 @@
           (signed-in-redirect (:game-token result) (:game-player-id result)))))))
 
 (defn- login-token-page [request]
-  (let [game-token (get-in request [:query-params "game-token"])]
+  (let [game-token (get-in request [:params :game-token])]
     (if (seq game-token)
       (response/redirect (str "/login/" (game-repository/normalize-token game-token)))
       (access-view/game-token-page))))
