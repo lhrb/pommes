@@ -91,7 +91,8 @@
                        (overview datasource game-token game-player-id))]
       (game-view/page (assoc data
                              :scheduled-for (get-in request [:params :scheduled-for])
-                             :anti-forgery-token (:anti-forgery-token request)))
+                             :anti-forgery-token (:anti-forgery-token request)
+                             :server-now (System/currentTimeMillis)))
       (response/status (response/response "Log in to access this game.") 401))))
 
 (defn- schedule-setup [datasource request]
@@ -107,7 +108,11 @@
       :else
       (let [{:keys [form errors setup]} (setup-from-params (:params request))]
         (if (seq errors)
-          (response/status (game-view/page (assoc data :form form :errors errors)) 400)
+          (response/status (game-view/page (assoc data
+                                                   :form form
+                                                   :errors errors
+                                                   :server-now (System/currentTimeMillis)))
+                           400)
           (let [apply-at-tick (game-repository/schedule-setup! datasource game-player-id setup)]
             (response/redirect
              (str "/games/" (game-repository/normalize-token game-token)

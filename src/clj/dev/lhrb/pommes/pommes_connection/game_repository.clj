@@ -236,7 +236,7 @@
                            query-options)]
     (when game-player
       (let [game (jdbc/execute-one! connectable
-                                    ["SELECT id, name, tick FROM games WHERE id = ?" game-id]
+                                    ["SELECT id, name, tick, next_tick_at FROM games WHERE id = ?" game-id]
                                     query-options)
             players (jdbc/execute! connectable
                                   ["SELECT game_players.id, game_players.player_name,

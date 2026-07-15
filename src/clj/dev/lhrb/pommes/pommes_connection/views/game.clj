@@ -69,6 +69,9 @@
 (def cost-script
   "document.querySelectorAll(\"[data-dish]\").forEach(function (dish) {\n  const updateCost = function () {\n    const total = Array.from(dish.querySelectorAll(\"select option:checked\")).reduce(function (sum, option) { return sum + Number(option.dataset.cost || 0); }, 0);\n    dish.querySelector(\"[data-cost-total]\").textContent = \"€\" + total.toFixed(2);\n  };\n  dish.querySelectorAll(\"select\").forEach(function (input) { input.addEventListener(\"change\", updateCost); });\n  updateCost();\n});")
 
+(def refresh-script
+  "(function () {\n  const refresh = document.querySelector(\"[data-game-refresh]\");\n  if (!refresh) return;\n\n  const nextTickAt = Number(refresh.dataset.nextTickAt);\n  const serverNow = Number(refresh.dataset.serverNow);\n  const pageLoadedAt = performance.now();\n  const initialRemainingMillis = nextTickAt - serverNow;\n  const storageKey = \"pommes-connection:auto-refresh:\" + refresh.dataset.gameToken;\n  const toggle = document.getElementById(\"automatic-refresh\");\n  const countdown = document.getElementById(\"next-tick-countdown\");\n  const status = document.getElementById(\"refresh-status\");\n  const menuForm = document.getElementById(\"menu-form\");\n  let dirty = false;\n  let reloadPending = false;\n\n  try { toggle.checked = localStorage.getItem(storageKey) !== \"false\"; } catch (_) { toggle.checked = true; }\n\n  const remainingMillis = function () { return Math.max(0, initialRemainingMillis - (performance.now() - pageLoadedAt)); };\n  const remainingLabel = function () {\n    const seconds = Math.ceil(remainingMillis() / 1000);\n    const minutes = Math.floor(seconds / 60);\n    return minutes > 0 ? minutes + \"m \" + (seconds % 60) + \"s\" : seconds + \"s\";\n  };\n\n  const update = function () {\n    countdown.textContent = Number.isFinite(initialRemainingMillis) ? remainingLabel() : \"soon\";\n    if (toggle.checked && !dirty && Number.isFinite(initialRemainingMillis) && remainingMillis() === 0 && !reloadPending) {\n      reloadPending = true;\n      window.setTimeout(function () { window.location.reload(); }, 750);\n    }\n  };\n\n  toggle.addEventListener(\"change\", function () {\n    try { localStorage.setItem(storageKey, String(toggle.checked)); } catch (_) {}\n    status.textContent = toggle.checked ? (dirty ? \"Automatic refresh is paused while you edit.\" : \"Automatic refresh is on.\") : \"Automatic refresh is off.\";\n  });\n\n  if (menuForm) {\n    const pauseRefresh = function () { dirty = true; status.textContent = \"Automatic refresh is paused while you edit.\"; };\n    menuForm.addEventListener(\"input\", pauseRefresh);\n    menuForm.addEventListener(\"change\", pauseRefresh);\n  }\n\n  update();\n  window.setInterval(update, 1000);\n})();")
+
 (defn- viewer-tick-summary [latest-tick viewer-id]
   (some #(when (= viewer-id (:player-id %)) %) (:players latest-tick)))
 
@@ -97,7 +100,7 @@
     [:div.stat-row [:span "Prestige"] [:strong (quantity (:prestige player))]]]))
 
 (defn page
-  [{:keys [game viewer players city latest-tick form errors scheduled-for anti-forgery-token]}]
+  [{:keys [game viewer players city latest-tick form errors scheduled-for anti-forgery-token server-now]}]
   (let [options (setup-options)
         viewer-result (viewer-tick-summary latest-tick (:id viewer))
         dishes (take (:dish-count options) (concat (or (:dishes form) (:dishes viewer)) (repeat {})))]
@@ -105,9 +108,19 @@
          (str (:name game) " | Pommes Connection")
          [:main
           [:header.masthead
-           [:p.eyebrow "Pommes Connection · local edition"]
+          [:p.eyebrow "Pommes Connection · local edition"]
            [:h1 (:name game)]
-           [:p.subhead (str "Counter: " (:name viewer) " · ") (layout/badge (str "Tick " (:tick game)))]]
+           [:p.subhead (str "Counter: " (:name viewer) " · ") (layout/badge (str "Tick " (:tick game)))]
+           [:div {:data-game-refresh true
+                  :data-game-token (:game-token game)
+                  :data-next-tick-at (:next-tick-at game)
+                  :data-server-now server-now}
+            [:p.subhead "Next rush in " [:strong {:id "next-tick-countdown"} "…"]]
+            [:label {:for "automatic-refresh" :style "font-size:13px;margin:8px 0 0"}
+             [:input {:id "automatic-refresh" :type "checkbox"
+                      :style "display:inline-block;width:18px;min-height:18px;margin:0 8px 0 0;padding:0;vertical-align:middle"}]
+             "Refresh automatically"]
+            [:p.meta {:id "refresh-status" :aria-live "polite"}]]]
           (let [[kind message] (city-notice game viewer-result scheduled-for)]
             (layout/notice kind message))
           (layout/panel "panel--yellow"
@@ -147,7 +160,7 @@
                          [:p "Changes wait for the next rush. Keep it short; let the fries speak."]
                          (when (seq errors)
                            [:p.errors "Please correct the marked menu details."])
-                         [:form {:method "post" :action (str "/games/" (:game-token game) "/setup")}
+                         [:form {:id "menu-form" :method "post" :action (str "/games/" (:game-token game) "/setup")}
                           (when anti-forgery-token
                             [:input {:type "hidden" :name "__anti-forgery-token" :value anti-forgery-token}])
                           [:fieldset
@@ -163,7 +176,8 @@
                          [:p.invite "Invite link · another fryer wanted: "
                           [:a {:href (str "/join/" (:invite-token game))}
                            (str "/join/" (:invite-token game))]]])
-          [:script (hiccup/raw-string cost-script)]])
+          [:script (hiccup/raw-string cost-script)]
+          [:script (hiccup/raw-string refresh-script)]])
         response/response
         (response/content-type "text/html; charset=utf-8"))))
 
