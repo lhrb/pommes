@@ -26,12 +26,17 @@
 (defn- penalty-active? [game-stats]
   (pos? (long (or (:audit-penalty-ticks game-stats) 0))))
 
+(defn- clamp
+  [minimum maximum value]
+  (max minimum (min maximum value)))
+
 (defn settle-player
   "Applies tax, suspicion, and an optional audit to one player's tick result.
 
    Returns [updated-player receipt]. `receipt` replaces the gross profit in
    the simulation's latest-tick result with tax-adjusted profit."
-  [{:keys [tax-rate suspicion-factor audit-every-ticks base-audit-chance
+  [{:keys [tax-rate suspicion-gain-per-concealment suspicion-decay
+           audit-every-ticks base-audit-chance maximum-audit-chance
            audit-penalty-ticks] :as rules}
    tick
    player
@@ -40,15 +45,19 @@
         penalty? (penalty-active? game-stats)
         configured-concealment (concealment-rate rules (:black-market player))
         concealment (if penalty? 0.0 configured-concealment)
-        concealed-revenue (* (double revenue) concealment)
         suspicion-before (double (or (:suspicion game-stats) 0.0))
-        suspicion-after-decay (* (+ suspicion-before
-                                    (* concealed-revenue (double suspicion-factor)))
-                                 0.999)
+        suspicion-after-decay (clamp 0.0 1.0
+                                     (* (+ suspicion-before
+                                           (* concealment
+                                              (double suspicion-gain-per-concealment)))
+                                        (double suspicion-decay)))
         audit-check? (and (not penalty?)
                           (pos? (long audit-every-ticks))
                           (zero? (mod (long tick) (long audit-every-ticks))))
-        audit-chance (min 1.0 (* (double base-audit-chance) suspicion-after-decay))
+        audit-chance (+ (double base-audit-chance)
+                        (* suspicion-after-decay
+                           (- (double maximum-audit-chance)
+                              (double base-audit-chance))))
         audited? (and audit-check? (< (audit-roll (:id player) tick) audit-chance))
         effective-concealment (if audited? 0.0 concealment)
         effective-tax-rate (* (double tax-rate) (if (or penalty? audited?) 2.0 1.0))
@@ -80,8 +89,10 @@
     [(assoc player :game-stats updated-game-stats) receipt]))
 
 (comment
-  (def rules {:tax-rate 0.19 :suspicion-factor 0.02 :audit-every-ticks 10
-              :base-audit-chance 0.05 :audit-penalty-ticks 10
+  (def rules {:tax-rate 0.19 :suspicion-gain-per-concealment 0.10
+              :suspicion-decay 0.97 :audit-every-ticks 10
+              :base-audit-chance 0.05 :maximum-audit-chance 0.55
+              :audit-penalty-ticks 3
               :items {:creative-bookkeeping {:maximum-concealment 0.10}}})
   (def player {:id 1 :black-market {:creative-bookkeeping 10}
                :game-stats {:suspicion 0.0}})

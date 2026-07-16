@@ -11,6 +11,7 @@
    [dev.lhrb.pommes.pommes-connection.views.dishes :as dishes-view]
    [dev.lhrb.pommes.pommes-connection.views.game :as game-view]
    [dev.lhrb.pommes.pommes-connection.views.research :as research-view]
+   [dev.lhrb.pommes.pommes-connection.views.stats :as stats-view]
    [integrant.core :as ig]
    [reitit.ring :as ring]
    [hiccup2.core :as h]
@@ -221,6 +222,11 @@
                                :anti-forgery-token (:anti-forgery-token request)))
     (response/status (response/response "Log in to access this game.") 401)))
 
+(defn- stats-page [datasource request]
+  (if-let [data (authorized-data datasource request)]
+    (stats-view/page data)
+    (response/status (response/response "Log in to access this game.") 401)))
+
 (defn- purchase-research [datasource request]
   (let [game-token (get-in request [:path-params :game-token])]
     (if-let [data (authorized-data datasource request)]
@@ -359,6 +365,8 @@
     ["/games/:game-token/research"
      {:get (fn [request] (research-page datasource request))
       :post (fn [request] (purchase-research datasource request))}]
+    ["/games/:game-token/stats"
+     {:get (fn [request] (stats-page datasource request))}]
     ["/games/:game-token/black-market"
      {:get (fn [request] (black-market-page datasource request))
       :post (fn [request] (purchase-black-market datasource request))}]]))

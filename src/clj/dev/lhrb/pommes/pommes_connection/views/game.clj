@@ -84,6 +84,11 @@
                          [:p "Verberge Einnahmen, spare Steuern und halte den Verdacht im Griff."]
                          [:a.button {:href (str "/games/" (:game-token game) "/black-market")}
                           "Schwarzmarkt öffnen"]])
+          (layout/panel "panel--yellow"
+                        [[:h2 "Stadtstatistik"]
+                         [:p "Sieh, wer welche Nachbarschaft erobert und wer bei Forschung und Kasse vorne liegt."]
+                         [:a.button {:href (str "/games/" (:game-token game) "/stats")}
+                          "Stadtstatistik öffnen"]])
           (layout/panel "panel--tight"
                         [[:h2 "Rivalenradar"]
                          [:p.meta "Gerücht: Irgendwer um die Ecke denkt schon wieder über Rabatt nach."]

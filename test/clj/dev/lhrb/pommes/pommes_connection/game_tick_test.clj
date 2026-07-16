@@ -53,21 +53,42 @@
     (is (= -0.15 (simulation/temporary-effect-utility player family)))))
 
 (deftest black-market-taxes-revenue-and-audits-deterministically
-  (let [rules {:tax-rate 0.19 :suspicion-factor 0.02 :audit-every-ticks 10
-               :base-audit-chance 100.0 :audit-penalty-ticks 10
+  (let [rules {:tax-rate 0.19 :suspicion-gain-per-concealment 0.10
+               :suspicion-decay 0.97 :audit-every-ticks 10
+               :base-audit-chance 1.0 :maximum-audit-chance 1.0
+               :audit-penalty-ticks 3
                :items {:creative-bookkeeping {:maximum-concealment 0.10}}}
         player {:id 7 :black-market {:creative-bookkeeping 25}
                 :game-stats {:suspicion 0.0}}
         [after-first receipt] (black-market/settle-player rules 1 player {:revenue 100.0 :profit 60.0})
-        [_ audit-receipt] (black-market/settle-player rules 10 after-first {:revenue 100.0 :profit 60.0})]
+        [after-audit audit-receipt] (black-market/settle-player rules 10 after-first {:revenue 100.0 :profit 60.0})
+        [after-first-penalty _] (black-market/settle-player rules 11 after-audit {:revenue 100.0 :profit 60.0})
+        [after-penalty _] (black-market/settle-player rules 12 after-first-penalty {:revenue 100.0 :profit 60.0})
+        [_ recovered-receipt] (black-market/settle-player rules 13 after-penalty {:revenue 100.0 :profit 60.0})]
     (is (< 0.09 (:concealment-rate receipt) 0.10))
     (is (< (:tax receipt) 19.0))
     (is (= (- 60.0 (:tax receipt)) (:profit receipt)))
     (is (pos? (get-in after-first [:game-stats :total-tax-avoided])))
     (is (:audited? audit-receipt))
-    (is (= 9 (:audit-penalty-ticks audit-receipt)))
+    (is (= 2 (:audit-penalty-ticks audit-receipt)))
     (is (= 38.0 (:tax audit-receipt)))
-    (is (= 0.0 (:suspicion audit-receipt)))))
+    (is (= 0.0 (:suspicion audit-receipt)))
+    (is (= 0 (get-in after-penalty [:game-stats :audit-penalty-ticks])))
+    (is (pos? (:tax-avoided recovered-receipt)))))
+
+(deftest black-market-suspicion-is-bounded-and-independent-of-revenue
+  (let [rules {:tax-rate 0.19 :suspicion-gain-per-concealment 0.10
+               :suspicion-decay 0.97 :audit-every-ticks 10
+               :base-audit-chance 0.05 :maximum-audit-chance 0.55
+               :audit-penalty-ticks 3
+               :items {:creative-bookkeeping {:maximum-concealment 0.10}}}
+        player {:id 7 :black-market {:creative-bookkeeping 25}
+                :game-stats {:suspicion 0.0}}
+        [_ small-revenue] (black-market/settle-player rules 1 player {:revenue 100.0 :profit 60.0})
+        [_ large-revenue] (black-market/settle-player rules 1 player {:revenue 1000000.0 :profit 600000.0})]
+    (is (= (:suspicion small-revenue) (:suspicion large-revenue)))
+    (is (= (:audit-chance small-revenue) (:audit-chance large-revenue)))
+    (is (< 0.05 (:audit-chance large-revenue) 0.55))))
 
 (deftest action-costs-scale-with-income-and-cash
   (is (= [300000.0 162000.0 112500.0 225000.0 189000.0 162000.0]
@@ -294,6 +315,9 @@
               actions-response (handler {:request-method :get
                                          :uri (str "/games/" game-token "/actions")
                                          :session {:game-token game-token :game-player-id game-player-id}})
+              stats-response (handler {:request-method :get
+                                       :uri (str "/games/" game-token "/stats")
+                                       :session {:game-token game-token :game-player-id game-player-id}})
               invalid-setup-response
               (handler {:request-method :post
                         :uri (str "/games/" game-token "/dishes/setup")
@@ -348,6 +372,11 @@
           (is (= 200 (:status dishes-response)))
           (is (= 200 (:status actions-response)))
           (is (re-find #"Send Punks" (:body actions-response)))
+          (is (= 200 (:status stats-response)))
+          (is (re-find #"Stadtstatistik" (:body stats-response)))
+          (is (re-find #"Marktanteile" (:body stats-response)))
+          (is (re-find #"Forschungsrennen" (:body stats-response)))
+          (is (re-find #"Steuern &amp; Hinterzimmer" (:body stats-response)))
           (is (re-find #"Marktprognose" (:body dishes-response)))
           (is (re-find #"Riesenportion \(€1,00\)" (:body dishes-response)))
           (is (re-find #"Wareneinsatz" (:body dishes-response)))

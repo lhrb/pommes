@@ -40,10 +40,12 @@
    :black-market
    {:cost {:base 20.0 :multiplier 2.0 :maximum-level 25}
     :tax-rate 0.19
-    :suspicion-factor 0.02
+    :suspicion-gain-per-concealment 0.10
+    :suspicion-decay 0.97
     :audit-every-ticks 10
     :base-audit-chance 0.05
-    :audit-penalty-ticks 10
+    :maximum-audit-chance 0.55
+    :audit-penalty-ticks 3
     :items
     {:creative-bookkeeping {:id :creative-bookkeeping :name "Kreative Buchführung"
                             :description "Einnahmen verschwinden zwischen den Zeilen."

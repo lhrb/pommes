@@ -273,7 +273,8 @@
                                     query-options)
             players (jdbc/execute! connectable
                                   ["SELECT game_players.id, game_players.player_name,
-                                           game_players.money, game_players.prestige
+                                           game_players.money, game_players.prestige,
+                                           game_players.active_effects, game_players.game_stats
                                     FROM game_players
                                     WHERE game_players.game_id = ?
                                     ORDER BY game_players.id"
@@ -299,7 +300,16 @@
                   :research (load-research connectable (:id game-player))
                   :black-market (load-black-market connectable (:id game-player))
                   :dishes (load-dishes connectable (:id game-player))}
-         :players (mapv #(assoc % :name (:player-name %)) players)
+         :players (mapv (fn [player]
+                          {:id (:id player)
+                           :name (:player-name player)
+                           :money (:money player)
+                           :prestige (:prestige player)
+                           :effects (decode (:active-effects player))
+                           :game-stats (decode (:game-stats player))
+                           :regulars (load-regulars connectable (:id player))
+                           :research (load-research connectable (:id player))})
+                        players)
          :city (if-let [city-state (:city-state game)]
                  (decode city-state)
                  (demographics-simulation/initial-city (:city simulation-config) game-id))
