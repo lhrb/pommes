@@ -11,5 +11,5 @@
           headers {}
           response (GET handler "/health" params headers)]
       (is (= 200 (:status response)))
-      (is (re-find #"Server: ready" (:body response)))
-      (is (re-find #"Database: ready" (:body response))))))
+      (is (re-find #"Server: bereit" (:body response)))
+      (is (re-find #"Datenbank: bereit" (:body response))))))

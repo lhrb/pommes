@@ -12,87 +12,87 @@
     [:ul.errors (for [message messages] [:li message])]))
 
 (defn- player-fields [form]
-  [[:label {:for "player-name"} "Player name"
+  [[:label {:for "player-name"} "Dein Budenname"
     [:input {:id "player-name" :name "player-name" :required true
              :autocomplete "username" :value (or (:player-name form) "")}]]
-   [:label {:for "player-password"} "Password"
+   [:label {:for "player-password"} "Passwort"
     [:input {:id "player-password" :name "player-password" :type "password" :required true
              :autocomplete "new-password"}]]])
 
 (defn create-page [{:keys [form errors anti-forgery-token]}]
   (-> (layout/page
-       "Create game | Pommes Connection"
+       "Spiel eröffnen | Pommes Connection"
        [:main
         [:header.masthead
-         [:p.eyebrow "Pommes Connection · city desk"]
-         [:h1 "Open for business"]
-         [:p.subhead "A new counter, a new rumor, a fresh batch."]]
+         [:p.eyebrow "Pommes Connection · die Lokalredaktion"]
+         [:h1 "Die Fritteuse ist eröffnet"]
+         [:p.subhead "Eine neue Bude, ein neues Gerücht, eine frische Ladung."]]
         (layout/panel "panel--yellow"
-                      [[:h2 "Start a game"]
-                       [:p "Name the neighborhood affair. You run the first stand."]
+                      [[:h2 "Spiel starten"]
+                       [:p "Gib der Nachbarschaftssause einen Namen. Du schmeißt die erste Bude."]
                        (error-list errors)
                        (into [:form {:method "post" :action "/create-game"}
                               (anti-forgery-input anti-forgery-token)
-                              [:label {:for "game-name"} "Game name"
+                              [:label {:for "game-name"} "Name des Spiels"
                                [:input {:id "game-name" :name "game-name" :required true
                                         :value (or (:game-name form) "")}]]]
-                             (concat (player-fields form) [(layout/button "Open the counter")]))])
+                             (concat (player-fields form) [(layout/button "Bude eröffnen")]))])
         (layout/panel "panel--quiet"
-                      [[:p "Already on the street?"]
-                       [:a {:href "/login"} "Use your game code →"]])])
+                      [[:p "Schon auf der Straße unterwegs?"]
+                       [:a {:href "/login"} "Mit Spielcode reinspazieren →"]])])
       response/response
       (response/content-type "text/html; charset=utf-8")))
 
 (defn join-page [{:keys [game form errors anti-forgery-token]}]
   (-> (layout/page
-       "Join game | Pommes Connection"
+       "Spiel beitreten | Pommes Connection"
        [:main
         [:header.masthead
-         [:p.eyebrow "Extra! Counter vacancy"]
-         [:h1 "Join the block"]
-         [:p.subhead (str (:name game) " needs another fryer.")]]
+         [:p.eyebrow "Extrablatt! Bude frei"]
+         [:h1 "Komm in die Nachbarschaft"]
+         [:p.subhead (str (:name game) " braucht noch eine Fritteuse.")]]
         (layout/panel "panel--yellow"
-                      [[:h2 "Claim your counter"]
+                      [[:h2 "Schnapp dir deine Bude"]
                        (error-list errors)
                        (into [:form {:method "post" :action (str "/join/" (:invite-token game))}
                               (anti-forgery-input anti-forgery-token)]
-                             (concat (player-fields form) [(layout/button "Join this game")]))])])
+                             (concat (player-fields form) [(layout/button "Diesem Spiel beitreten")]))])])
       response/response
       (response/content-type "text/html; charset=utf-8")))
 
 (defn login-page [{:keys [game form errors anti-forgery-token]}]
   (-> (layout/page
-       "Log in | Pommes Connection"
+       "Anmelden | Pommes Connection"
        [:main
         [:header.masthead
-         [:p.eyebrow "Pommes Connection · night edition"]
-         [:h1 "Back at the counter"]
-         [:p.subhead (str (:name game) " is still serving.")]]
+         [:p.eyebrow "Pommes Connection · Nachtausgabe"]
+         [:h1 "Zurück an die Bude"]
+         [:p.subhead (str (:name game) " hat noch geöffnet.")]]
         (layout/panel nil
-                      [[:h2 "Log in"]
+                      [[:h2 "Anmelden"]
                        (error-list errors)
                        (into [:form {:method "post" :action (str "/login/" (:game-token game))}
                               (anti-forgery-input anti-forgery-token)]
-                             (concat (player-fields form) [(layout/button "Return to the street")]))])
+                             (concat (player-fields form) [(layout/button "Zurück auf die Straße")]))])
         (layout/panel "panel--quiet"
-                      [[:p [:a {:href "/create-game"} "Start a new neighborhood →"]]])])
+                      [[:p [:a {:href "/create-game"} "Neue Nachbarschaft eröffnen →"]]])])
       response/response
       (response/content-type "text/html; charset=utf-8")))
 
 (defn game-token-page []
   (-> (layout/page
-       "Log in | Pommes Connection"
+       "Anmelden | Pommes Connection"
        [:main
         [:header.masthead
-         [:p.eyebrow "Street directory"]
-         [:h1 "Find your game"]
-         [:p.subhead "The code is on the invite, probably under a ketchup stain."]]
+         [:p.eyebrow "Straßenverzeichnis"]
+         [:h1 "Finde dein Spiel"]
+         [:p.subhead "Der Code steht auf der Einladung, vermutlich unter einem Klecks Ketchup."]]
         (layout/panel nil
                       [[:form {:method "get" :action "/login"}
-                        [:label {:for "game-token"} "Game code"
+                        [:label {:for "game-token"} "Spielcode"
                          [:input {:id "game-token" :name "game-token" :required true
                                   :autocapitalize "characters"}]]
-                        (layout/button "Find the counter")]])])
+                        (layout/button "Bude finden")]])])
       response/response
       (response/content-type "text/html; charset=utf-8")))
 

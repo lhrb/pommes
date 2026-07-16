@@ -1,5 +1,6 @@
 (ns dev.lhrb.pommes.pommes-connection.simulation
   (:require
+   [dev.lhrb.pommes.pommes-connection.demographics-simulation :as demographics-simulation]
    [dev.lhrb.pommes.pommes-connection.game-data :as game-data]))
 
 ;; Each tick assigns a whole number of customers to offers. Softmax shares
@@ -1101,7 +1102,12 @@
            market]
     :as state}]
 
-  (let [demographics
+  (let [city
+        (if (:next-demographics-at-tick city)
+          city
+          (demographics-simulation/initial-city city))
+
+        demographics
         (:demographics city)
 
         ;; The complete tick uses one immutable snapshot of all player offers.
@@ -1139,13 +1145,17 @@
           rules
           (or market {})
           demographics
-          results)]
+          results)
+
+        updated-city
+        (demographics-simulation/evolve-city city (inc (or tick 0)))]
 
     (assoc
       state
       :tick (inc (or tick 0))
       :players updated-players
       :market updated-market
+      :city updated-city
       :last-market results)))
 
 (defn run-ticks

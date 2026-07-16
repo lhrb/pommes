@@ -3,6 +3,7 @@
    [clojure.edn :as edn]
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]
+   [dev.lhrb.pommes.pommes-connection.demographics-simulation :as demographics-simulation]
    [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
    [dev.lhrb.pommes.pommes-connection.game-repository :as game-repository]
    [dev.lhrb.pommes.pommes-connection.game-tick :as game-tick]
@@ -53,6 +54,26 @@
              (set (keys (get-in demographic [:preferences :topping])))))
       (is (= (set (keys (:interiors catalog)))
              (set (keys (get-in demographic [:preferences :interior]))))))))
+
+(deftest city-population-growth-and-composition-drift-are-bounded
+  (let [city (demographics-simulation/initial-city
+              (:city game-data/game-data) 42)
+        before-drift (demographics-simulation/evolve-city city 5700)
+        after-drift (demographics-simulation/evolve-city city 5760)
+        repeated (demographics-simulation/evolve-city city 5760)
+        shares (mapv #(/ (double (:population %)) (:population after-drift))
+                     (:demographics after-drift))
+        share-changes (map #(Math/abs (- %1 %2))
+                           shares
+                           (mapv #(/ (double (:population %)) (:population before-drift))
+                                 (:demographics before-drift)))]
+    (is (= 100 (:population city)))
+    (is (= 937506 (:population after-drift)))
+    (is (= (:population after-drift)
+           (reduce + (map :population (:demographics after-drift)))))
+    (is (every? #(<= 0.05 % 0.40) shares))
+    (is (<= (apply max share-changes) 0.011))
+    (is (= after-drift repeated))))
 
 (defn- anti-forgery-token [body]
   (second (re-find #"name=\"__anti-forgery-token\"[^>]*value=\"([^\"]+)\"" body)))
@@ -151,7 +172,7 @@
                     :topping :ketchup
                     :price 5.5}]})
         (game-tick/run-next-tick! datasource game-id simulation-config)
-        (let [game (jdbc/execute-one! datasource ["SELECT tick FROM games WHERE id = ?" game-id]
+        (let [game (jdbc/execute-one! datasource ["SELECT tick, city_state FROM games WHERE id = ?" game-id]
                                       query-options)
               player (jdbc/execute-one! datasource
                                         ["SELECT interior FROM game_players WHERE id = ?" game-player-id]
@@ -201,6 +222,8 @@
                                  :dish-3-topping "special"
                                  :dish-3-price "6.0"}})]
           (is (= 1 (:tick game)))
+          (is (= 100 (:population (edn/read-string (:city-state game)))))
+          (is (= 100 (get-in overview [:city :population])))
           (is (= "cozy" (:interior player)))
           (is (= "Cozy special" (:name dish)))
           (is (= 5.5 (:price dish)))

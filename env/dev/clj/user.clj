@@ -46,7 +46,8 @@
   (licp/update-classpath! {:aliases [:dev :test]}))
 
 (comment
-  (go)
-  (reset)
-  (halt)
-  (update-deps))
+ (go)
+ (reset)
+ (halt)
+ (reset-all)
+ (update-deps))

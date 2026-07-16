@@ -50,7 +50,18 @@
                     :foodies 7.50}}
 
    :city
-   {:demographics
+   {:initial-population 100
+    :maximum-population 1000000
+    :population-growth-half-life-ticks 1440
+    :demographics-update-every-ticks 60
+    ;; At tick 5,760 the growth curve has reached roughly 93.75% of capacity.
+    ;; That is where the city starts writing its own demographic story.
+    :composition-drift-start-population 937500
+    :minimum-demographic-share 0.05
+    :maximum-demographic-share 0.40
+    :maximum-share-change 0.01
+
+    :demographics
     [{:id :students
       :population 500
       :eat-rate 0.12

@@ -2,6 +2,7 @@
   (:require
    [clojure.edn :as edn]
    [clojure.string :as str]
+   [dev.lhrb.pommes.pommes-connection.demographics-simulation :as demographics-simulation]
    [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
    [next.jdbc :as jdbc]
    [next.jdbc.result-set :as rs])
@@ -195,7 +196,7 @@
 (defn load-game-state
   [connectable game-id simulation-config]
   (let [game (jdbc/execute-one! connectable
-                                ["SELECT id, tick, market_state, next_tick_at FROM games WHERE id = ?" game-id]
+                                ["SELECT id, tick, market_state, city_state, next_tick_at FROM games WHERE id = ?" game-id]
                                 query-options)]
     (when-not game
       (throw (ex-info "Game does not exist" {:game-id game-id})))
@@ -209,6 +210,9 @@
               :tick (:tick game)
               :next-tick-at (:next-tick-at game)
               :market (decode (:market-state game))
+              :city (if-let [city-state (:city-state game)]
+                      (decode city-state)
+                      (demographics-simulation/initial-city (:city simulation-config) game-id))
               :players
               (mapv (fn [player]
                       {:id (:id player)
@@ -236,7 +240,7 @@
                            query-options)]
     (when game-player
       (let [game (jdbc/execute-one! connectable
-                                    ["SELECT id, name, tick, next_tick_at FROM games WHERE id = ?" game-id]
+                                    ["SELECT id, name, tick, city_state, next_tick_at FROM games WHERE id = ?" game-id]
                                     query-options)
             players (jdbc/execute! connectable
                                   ["SELECT game_players.id, game_players.player_name,
@@ -263,7 +267,9 @@
                   :effects (decode (:active-effects game-player))
                   :dishes (load-dishes connectable (:id game-player))}
          :players (mapv #(assoc % :name (:player-name %)) players)
-         :city (:city simulation-config)
+         :city (if-let [city-state (:city-state game)]
+                 (decode city-state)
+                 (demographics-simulation/initial-city (:city simulation-config) game-id))
          :latest-tick (when latest-tick
                         (assoc (decode (:summary latest-tick))
                                :tick (:tick latest-tick)))}))))
@@ -357,8 +363,9 @@
 (defn persist-tick!
   [connectable state action-ids summary]
   (jdbc/execute-one! connectable
-                     ["UPDATE games SET tick = ?, market_state = ?, next_tick_at = ? WHERE id = ?"
-                      (:tick state) (encode (:market state)) (:next-tick-at state) (:game-id state)]
+                     ["UPDATE games SET tick = ?, market_state = ?, city_state = ?, next_tick_at = ? WHERE id = ?"
+                      (:tick state) (encode (:market state)) (encode (:city state))
+                      (:next-tick-at state) (:game-id state)]
                      query-options)
   (doseq [player (:players state)]
     (jdbc/execute-one! connectable

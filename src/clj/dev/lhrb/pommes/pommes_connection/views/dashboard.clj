@@ -15,20 +15,20 @@
   (let [database-ready? (database-ready? datasource)
         status          (if database-ready? 200 503)]
     (-> (layout/page
-         "Pommes Connection health"
+         "Systemstatus | Pommes Connection"
          [:main
           [:header.masthead
-           [:p.eyebrow "Pommes Connection · machine room"]
-           [:h1 "City desk status"]
-           [:p.subhead "The fryer line is being watched."]]
+           [:p.eyebrow "Pommes Connection · Maschinenraum"]
+           [:h1 "Lagebericht aus der Frittenzentrale"]
+           [:p.subhead "Die Fritteusenleitung wird scharf beobachtet."]]
           (layout/panel (if database-ready? "panel--yellow" "panel--quiet")
-                        [[:h2 "Service bulletin"]
-                         (layout/stat-row "Server" "ready")
-                         (layout/stat-row "Database" (if database-ready? "ready" "not ready"))
-                         [:p.meta (str "Server: ready · Database: " (if database-ready? "ready" "not ready"))]
+                        [[:h2 "Amtliche Durchsage"]
+                         (layout/stat-row "Server" "bereit")
+                         (layout/stat-row "Datenbank" (if database-ready? "bereit" "nicht bereit"))
+                         [:p.meta (str "Server: bereit · Datenbank: " (if database-ready? "bereit" "nicht bereit"))]
                          [:p.meta (if database-ready?
-                                    "No inspector nearby."
-                                    "Inspector nearby: database needs attention.")]])])
+                                    "Kein Kontrolleur weit und breit."
+                                    "Kontrolleur in Sicht: Die Datenbank braucht Zuwendung.")]])])
         (response/response)
         (response/content-type "text/html; charset=utf-8")
         (response/status status))))

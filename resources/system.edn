@@ -22,6 +22,6 @@
  {:router #ig/ref :app/routes}
 
  :server/http
- {:port    #long #or [#env PORT 3000]
+ {:port    #long #or [#env PORT 3333]
   :host    #or [#env HTTP_HOST "0.0.0.0"]
   :handler #ig/ref :app/web}}
