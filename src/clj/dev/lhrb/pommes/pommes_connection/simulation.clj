@@ -1188,280 +1188,6 @@
 ;; Sample game
 ;; ---------------------------------------------------------------------------
 
-(comment
-(def sample-state
-  {:tick 0
-
-   :rules
-   {:tick-seconds 30
-
-    ;; Higher values make customers more aggressively choose the best offer.
-    :choice-beta 3.5
-
-    ;; 0.10 means market memory changes by 10% toward the latest tick.
-    :market-memory-alpha 0.10
-
-    :relative-price-cap 0.25
-    :status-cap 0.25
-
-    :budget-price-ratio 0.80
-    :premium-price-ratio 1.40}
-
-   ;; The market starts with assumptions about normal prices.
-   ;; Recent topping and positioning shares default to uniform distributions.
-   :market
-   {:price-anchors
-    {:students 4.50
-     :families 5.50
-     :yuppies 6.00}}
-
-   :city
-   {:demographics
-    [{:id :students
-      :population 500
-
-      ;; Roughly 12% of this group considers buying fries each tick.
-      :eat-rate 0.12
-
-      ;; Buying nothing participates in softmax like another competitor.
-      :outside-option-utility 0.48
-
-      :behavior
-      {:topping-variety-strength 0.20
-       :positioning-variety-strength 0.10}
-
-      :preferences
-      {:weights
-       {:size 1.0
-        :seasoning 0.3
-        :topping 0.9
-        :price 1.8
-        :interior 0.2}
-
-       :size
-       {:small 0.9
-        :medium 0.7
-        :large 0.5
-        :extra-large 0.3}
-
-       :seasoning
-       {:salt 0.8
-        :pommesgewuerz 0.7}
-
-       :topping
-       {:none 0.3
-        :ketchup 1.0
-        :mayo 0.7
-        :ketchup-mayo 0.9
-        :special 0.4
-        :sate 0.5}
-
-       :price
-       {:model :cheap
-        :max 5.00
-        :anchor 4.50
-        :relative-price-strength 0.25}
-
-       :interior
-       {:classic 0.5
-        :modern 0.8
-        :street-food 1.0}}}
-
-     {:id :families
-      :population 350
-      :eat-rate 0.08
-      :outside-option-utility 0.50
-
-      :behavior
-      {:topping-variety-strength 0.05
-       :positioning-variety-strength 0.03}
-
-      :preferences
-      {:weights
-       {:size 1.3
-        :seasoning 0.4
-        :topping 0.7
-        :price 1.0
-        :interior 0.8}
-
-       :size
-       {:small 0.7
-        :medium 0.8
-        :large 0.9
-        :extra-large 1.0}
-
-       :seasoning
-       {:salt 1.0
-        :pommesgewuerz 0.6}
-
-       :topping
-       {:none 0.5
-        :ketchup 1.0
-        :mayo 0.8
-        :ketchup-mayo 0.9
-        :special 0.5
-        :sate 0.2}
-
-       :price
-       {:model :value
-        :ideal 5.50
-        :tolerance 2.25
-        :anchor 5.50
-        :relative-price-strength 0.10}
-
-       :interior
-       {:classic 1.0
-        :modern 0.8
-        :street-food 0.2}}}
-
-     {:id :yuppies
-      :population 180
-      :eat-rate 0.07
-      :outside-option-utility 0.52
-
-      ;; This group likes novelty and exclusivity.
-      :behavior
-      {:topping-variety-strength 0.35
-       :positioning-variety-strength 0.30}
-
-      :preferences
-      {:weights
-       {:size 1.3
-        :seasoning 0.5
-        :topping 1.4
-        :price 1.0
-        :interior 1.3}
-
-       ;; Smaller servings can be a feature rather than a weakness.
-       :size
-       {:small 1.0
-        :medium 0.65
-        :large 0.3
-        :extra-large 0.0}
-
-       :seasoning
-       {:salt 0.4
-        :pommesgewuerz 1.0}
-
-       :topping
-       {:none 0.2
-        :ketchup 0.1
-        :mayo 0.2
-        :ketchup-mayo 0.1
-        :special 1.0
-        :sate 0.8}
-
-       :price
-       {:model :status
-
-        ;; €9 is not considered a mistake for this demographic.
-        :ideal 9.00
-        :tolerance 3.00
-
-        ;; Current normal market price.
-        :anchor 6.00
-
-        ;; Expensiveness relative to competitors can add utility.
-        :status-strength 0.40}
-
-       :interior
-       {:classic 0.2
-        :modern 1.0
-        :street-food 0.6}}}]}
-
-   :players
-   [{:id :fritza
-     :money 20.0
-     :prestige 0.0
-     :interior :street-food
-     :market-modifiers {}
-     :effects []
-
-     :dishes
-     [{:id :cheap-ketchup
-       :pommes
-       {:size :small
-        :seasoning :salt}
-       :topping :ketchup
-       :price 3.50}
-
-      {:id :large-mayo
-       :pommes
-       {:size :large
-        :seasoning :pommesgewuerz}
-       :topping :mayo
-       :price 5.20}
-
-      {:id :special
-       :pommes
-       {:size :large
-        :seasoning :pommesgewuerz}
-       :topping :special
-       :price 6.00}]}
-
-    {:id :goldene-gabel
-     :money 20.0
-     :prestige 0.0
-     :interior :classic
-     :market-modifiers {}
-
-     ;; This penalty applies during the next calculated tick.
-     :effects
-     [{:kind :rats
-       :utility -0.20
-       :ticks-left 1}]
-
-     :dishes
-     [{:id :classic
-       :pommes
-       {:size :large
-        :seasoning :salt}
-       :topping :ketchup-mayo
-       :price 4.80}
-
-      {:id :kids
-       :pommes
-       {:size :small
-        :seasoning :salt}
-       :topping :ketchup
-       :price 3.80}
-
-      {:id :sate
-       :pommes
-       {:size :large
-        :seasoning :pommesgewuerz}
-       :topping :sate
-       :price 6.50}]}
-
-    {:id :pommes-lab
-     :money 20.0
-     :prestige 0.0
-     :interior :modern
-     :market-modifiers {}
-     :effects []
-
-     :dishes
-     [{:id :micro-special
-       :pommes
-       {:size :small
-        :seasoning :pommesgewuerz}
-       :topping :special
-       :price 9.00}
-
-      {:id :sate-edition
-       :pommes
-       {:size :small
-        :seasoning :pommesgewuerz}
-       :topping :sate
-       :price 8.50}
-
-      {:id :normal-ketchup
-       :pommes
-       {:size :small
-        :seasoning :salt}
-       :topping :ketchup
-       :price 4.50}]}]}))
-
 (def sample-state
   (merge
    {:tick 0
@@ -1538,4 +1264,48 @@
                  :demographics #{:yuppies}
                  :ticks-left 3})
               player))
-          players)))))
+          players))))
+
+  sample-state
+
+  ;; Compare one simulated tick with and without an action. Effects are read
+  ;; from game-data, so these examples follow future balance changes.
+  (defn example-state-with-action [state action-id target-player-id]
+        (let [action (game-data/action action-id)]
+          (update state :players
+                  (fn [players]
+                      (mapv (fn [player]
+                                (if (= target-player-id (:id player))
+                                    (update player :effects into
+                                            (map #(assoc %
+                                                         :action-id action-id
+                                                         :ticks-left (:duration action))
+                                                 (:effects action)))
+                                  player))
+                            players)))))
+
+  (defn example-player-result [state player-id]
+    (let [player (some #(when (= player-id (:id %)) %) (:players state))]
+      (select-keys (assoc (:last-tick player) :money (:money player))
+                   [:money :sales :revenue :profit :demographic-sales])))
+
+  (defn compare-action-example [action-id target-player-id]
+    (let [without-effect (simulate-tick sample-state)
+          with-effect (simulate-tick
+                       (example-state-with-action sample-state action-id target-player-id))]
+      {:without-effect (example-player-result without-effect target-player-id)
+       :with-effect (example-player-result with-effect target-player-id)}))
+
+  ;; Send Punks affects a rival. Compare Pommes Lab's student/family/retiree sales.
+  (def send-punks-example
+    (compare-action-example :send-punks :pommes-lab))
+
+  ;; Rocker Meeting attracts students but makes each successful order 20% larger.
+  (def rocker-meeting-example
+    (compare-action-example :rocker-meeting :fritza))
+
+  ;; Influencer Visit attracts yuppies and foodies while increasing price tolerance.
+  (def influencer-visit-example
+    (compare-action-example :influencer-visit :pommes-lab))
+
+  )
