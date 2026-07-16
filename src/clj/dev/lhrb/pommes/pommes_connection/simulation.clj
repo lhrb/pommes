@@ -1,7 +1,8 @@
 (ns dev.lhrb.pommes.pommes-connection.simulation
   (:require
    [dev.lhrb.pommes.pommes-connection.demographics-simulation :as demographics-simulation]
-   [dev.lhrb.pommes.pommes-connection.game-data :as game-data]))
+   [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
+   [integrant.repl.state :as state]))
 
 ;; Each tick assigns a whole number of customers to offers. Softmax shares
 ;; still express preference, while largest-remainder allocation keeps the
@@ -38,8 +39,8 @@
   [actual ideal tolerance]
   (let [distance
         (Math/abs
-          (- (double actual)
-             (double ideal)))
+         (- (double actual)
+            (double ideal)))
 
         tolerance
         (max 0.0001
@@ -81,13 +82,13 @@
     (if (zero? total-weight)
       0.0
       (/ (reduce-kv
-           (fn [sum feature weight]
-             (+ sum
-                (* (double weight)
-                   (double
-                     (get scores feature 0.0)))))
-           0.0
-           weights)
+          (fn [sum feature weight]
+            (+ sum
+               (* (double weight)
+                  (double
+                   (get scores feature 0.0)))))
+          0.0
+          weights)
          total-weight))))
 
 (defn uniform-shares
@@ -116,14 +117,14 @@
               0.0))
 
      (double
-       (get-in catalog
-               [:seasonings (:seasoning pommes) :cost]
-               0.0))
+      (get-in catalog
+              [:seasonings (:seasoning pommes) :cost]
+              0.0))
 
      (double
-       (get-in catalog
-               [:toppings topping :cost]
-               0.0))))
+      (get-in catalog
+              [:toppings topping :cost]
+              0.0))))
 
 (defn dish-margin
   [catalog dish]
@@ -189,25 +190,25 @@
 
       :value
       (ideal-score
-        price
-        (double
-          (get price-preferences
-               :ideal
-               5.0))
-        (double
-          (* tolerance-multiplier
-             (double (get price-preferences :tolerance 2.0)))))
+       price
+       (double
+        (get price-preferences
+             :ideal
+             5.0))
+       (double
+        (* tolerance-multiplier
+           (double (get price-preferences :tolerance 2.0)))))
 
       :status
       (ideal-score
-        price
-        (double
-          (get price-preferences
-               :ideal
-               8.0))
-        (double
-          (* tolerance-multiplier
-             (double (get price-preferences :tolerance 3.0)))))
+       price
+       (double
+        (get price-preferences
+             :ideal
+             8.0))
+       (double
+        (* tolerance-multiplier
+           (double (get price-preferences :tolerance 3.0)))))
 
       0.0)))
 
@@ -221,30 +222,30 @@
 
     {:size
      (double
-       (get-in preferences
-               [:size (:size pommes)]
-               0.0))
+      (get-in preferences
+              [:size (:size pommes)]
+              0.0))
 
      :seasoning
      (double
-       (get-in preferences
-               [:seasoning (:seasoning pommes)]
-               0.0))
+      (get-in preferences
+              [:seasoning (:seasoning pommes)]
+              0.0))
 
      :topping
      (double
-       (get-in preferences
-               [:topping (:topping dish)]
-               0.0))
+      (get-in preferences
+              [:topping (:topping dish)]
+              0.0))
 
      :price
      (price-score demographic player dish)
 
      :interior
      (double
-       (get-in preferences
-               [:interior (:interior player)]
-               0.0))}))
+      (get-in preferences
+              [:interior (:interior player)]
+              0.0))}))
 
 (defn concept-match
   "Measures how well the non-price parts of the offer fit.
@@ -253,20 +254,20 @@
    cannot turn bad fries into a desirable premium product."
   [demographic feature-scores]
   (weighted-average
-    (dissoc
-      (get-in demographic
-              [:preferences :weights]
-              {})
-      :price)
-    feature-scores))
+   (dissoc
+    (get-in demographic
+            [:preferences :weights]
+            {})
+    :price)
+   feature-scores))
 
 (defn preference-match
   [demographic feature-scores]
   (weighted-average
-    (get-in demographic
-            [:preferences :weights]
-            {})
-    feature-scores))
+   (get-in demographic
+           [:preferences :weights]
+           {})
+   feature-scores))
 
 ;; ---------------------------------------------------------------------------
 ;; Dynamic market context
@@ -279,17 +280,17 @@
                 [:preferences :price])]
 
     (double
-      (or anchor
-          ideal
-          max
-          5.0))))
+     (or anchor
+         ideal
+         max
+         5.0))))
 
 (defn market-price-anchor
   [market demographic]
   (double
-    (get-in market
-            [:price-anchors (:id demographic)]
-            (default-price-anchor demographic))))
+   (get-in market
+           [:price-anchors (:id demographic)]
+           (default-price-anchor demographic))))
 
 (defn relative-price-utility
   "For non-status demographics, being cheaper than the market price anchor
@@ -304,8 +305,8 @@
 
         strength
         (double
-          (or relative-price-strength
-              0.0))
+         (or relative-price-strength
+             0.0))
 
         price
         (max 0.01
@@ -314,19 +315,19 @@
         anchor
         (max 0.01
              (market-price-anchor
-               market
-               demographic))
+              market
+              demographic))
 
         ;; Positive when the dish is cheaper than the market.
         relative-price
         (- (Math/log
-             (/ price anchor)))
+            (/ price anchor)))
 
         cap
         (double
-          (get rules
-               :relative-price-cap
-               0.25))]
+         (get rules
+              :relative-price-cap
+              0.25))]
 
     (if (= model :status)
       0.0
@@ -347,8 +348,8 @@
 
         strength
         (double
-          (or status-strength
-              0.0))
+         (or status-strength
+             0.0))
 
         price
         (max 0.01
@@ -357,12 +358,12 @@
         anchor
         (max 0.01
              (market-price-anchor
-               market
-               demographic))
+              market
+              demographic))
 
         relative-premium
         (Math/log
-          (/ price anchor))
+         (/ price anchor))
 
         ;; Premium positioning only works when the non-price concept fits.
         gate
@@ -372,9 +373,9 @@
 
         cap
         (double
-          (get rules
-               :status-cap
-               0.25))]
+         (get rules
+              :status-cap
+              0.25))]
 
     (if (= model :status)
       (clamp (- cap)
@@ -389,8 +390,8 @@
   (let [anchor
         (max 0.01
              (market-price-anchor
-               market
-               demographic))
+              market
+              demographic))
 
         ratio
         (/ (double (:price dish))
@@ -398,15 +399,15 @@
 
         budget-threshold
         (double
-          (get rules
-               :budget-price-ratio
-               0.80))
+         (get rules
+              :budget-price-ratio
+              0.80))
 
         premium-threshold
         (double
-          (get rules
-               :premium-price-ratio
-               1.40))]
+         (get rules
+              :premium-price-ratio
+              1.40))]
 
     (cond
       (< ratio budget-threshold)
@@ -421,12 +422,12 @@
 (defn recent-share
   [market demographic-id dimension value default]
   (double
-    (get-in market
-            [:recent-shares
-             demographic-id
-             dimension
-             value]
-            default)))
+   (get-in market
+           [:recent-shares
+            demographic-id
+            dimension
+            value]
+           default)))
 
 (defn topping-trend-utility
   "Positive strength rewards underrepresented toppings.
@@ -436,9 +437,9 @@
   [market demographic dish]
   (let [options
         (keys
-          (get-in demographic
-                  [:preferences :topping]
-                  {}))
+         (get-in demographic
+                 [:preferences :topping]
+                 {}))
 
         target
         (safe-div 1.0
@@ -446,18 +447,18 @@
 
         current
         (recent-share
-          market
-          (:id demographic)
-          :topping
-          (:topping dish)
-          target)
+         market
+         (:id demographic)
+         :topping
+         (:topping dish)
+         target)
 
         strength
         (double
-          (get-in demographic
-                  [:behavior
-                   :topping-variety-strength]
-                  0.0))]
+         (get-in demographic
+                 [:behavior
+                  :topping-variety-strength]
+                 0.0))]
 
     (* strength
        (- target current))))
@@ -470,10 +471,10 @@
   [rules market demographic dish]
   (let [category
         (positioning-category
-          rules
-          market
-          demographic
-          dish)
+         rules
+         market
+         demographic
+         dish)
 
         target
         (/ 1.0
@@ -481,18 +482,18 @@
 
         current
         (recent-share
-          market
-          (:id demographic)
-          :positioning
-          category
-          target)
+         market
+         (:id demographic)
+         :positioning
+         category
+         target)
 
         strength
         (double
-          (get-in demographic
-                  [:behavior
-                   :positioning-variety-strength]
-                  0.0))]
+         (get-in demographic
+                 [:behavior
+                  :positioning-variety-strength]
+                 0.0))]
 
     (* strength
        (- target current))))
@@ -504,16 +505,16 @@
 (defn temporary-effect-utility
   [player demographic]
   (+ (double
-       (get-in player
-               [:market-modifiers :global]
-               0.0))
+      (get-in player
+              [:market-modifiers :global]
+              0.0))
 
      (double
-       (get-in player
-               [:market-modifiers
-                :demographics
-                (:id demographic)]
-               0.0))
+      (get-in player
+              [:market-modifiers
+               :demographics
+               (:id demographic)]
+              0.0))
 
      (reduce + 0.0
              (for [effect (:effects player)
@@ -527,12 +528,12 @@
   [effects]
   (->> effects
        (map
-         #(update %
-                  :ticks-left
-                  (fnil dec 1)))
+        #(update %
+                 :ticks-left
+                 (fnil dec 1)))
        (filter
-         #(pos?
-            (:ticks-left %)))
+        #(pos?
+          (:ticks-left %)))
        vec))
 
 ;; ---------------------------------------------------------------------------
@@ -543,52 +544,52 @@
   [rules market demographic player dish]
   (let [features
         (feature-scores
-          demographic
-          player
-          dish)
+         demographic
+         player
+         dish)
 
         concept
         (concept-match
-          demographic
-          features)
+         demographic
+         features)
 
         preference
         (preference-match
-          demographic
-          features)
+         demographic
+         features)
 
         relative-price
         (relative-price-utility
-          rules
-          market
-          demographic
-          dish)
+         rules
+         market
+         demographic
+         dish)
 
         status
         (status-utility
-          rules
-          market
-          demographic
-          dish
-          concept)
+         rules
+         market
+         demographic
+         dish
+         concept)
 
         topping-trend
         (topping-trend-utility
-          market
-          demographic
-          dish)
+         market
+         demographic
+         dish)
 
         positioning-trend
         (positioning-trend-utility
-          rules
-          market
-          demographic
-          dish)
+         rules
+         market
+         demographic
+         dish)
 
         effects
         (temporary-effect-utility
-          player
-          demographic)
+         player
+         demographic)
 
         total
         (+ preference
@@ -615,37 +616,37 @@
   [rules market demographic player]
   (when (empty? (:dishes player))
     (throw
-      (ex-info
-        "A player must offer at least one dish"
-        {:player-id (:id player)})))
+     (ex-info
+      "A player must offer at least one dish"
+      {:player-id (:id player)})))
 
   (->> (:dishes player)
        (map
-         (fn [dish]
-           (let [components
-                 (offer-components
-                   rules
-                   market
-                   demographic
-                   player
-                   dish)]
+        (fn [dish]
+          (let [components
+                (offer-components
+                 rules
+                 market
+                 demographic
+                 player
+                 dish)]
 
-             {:kind :purchase
-              :player-id (:id player)
-              :dish-id (:id dish)
-              :dish dish
+            {:kind :purchase
+             :player-id (:id player)
+             :dish-id (:id dish)
+             :dish dish
 
-              :positioning
-              (positioning-category
-                rules
-                market
-                demographic
-                dish)
+             :positioning
+             (positioning-category
+              rules
+              market
+              demographic
+              dish)
 
-              :components components
-              :order-value-multiplier
-              (+ 1.0 (effect-modifier player :average-order-size demographic))
-              :utility (:total components)})))
+             :components components
+             :order-value-multiplier
+             (+ 1.0 (effect-modifier player :average-order-size demographic))
+             :utility (:total components)})))
        (apply max-key :utility)))
 
 (defn outside-option
@@ -653,9 +654,9 @@
   [demographic]
   (let [utility
         (double
-          (get demographic
-               :outside-option-utility
-               0.45))]
+         (get demographic
+              :outside-option-utility
+              0.45))]
 
     {:kind :outside
      :player-id nil
@@ -678,15 +679,15 @@
 
         weighted
         (mapv
-          (fn [option]
-            (assoc
-              option
-              :choice-weight
-              (Math/exp
-                (* (double beta)
-                   (- (double (:utility option))
-                      maximum)))))
-          options)
+         (fn [option]
+           (assoc
+            option
+            :choice-weight
+            (Math/exp
+             (* (double beta)
+                (- (double (:utility option))
+                   maximum)))))
+         options)
 
         total-weight
         (reduce + 0.0
@@ -694,14 +695,14 @@
                      weighted))]
 
     (mapv
-      (fn [option]
-        (assoc
-          option
-          :share
-          (safe-div
-            (:choice-weight option)
-            total-weight)))
-      weighted)))
+     (fn [option]
+       (assoc
+        option
+        :share
+        (safe-div
+         (:choice-weight option)
+         total-weight)))
+     weighted)))
 
 ;; ---------------------------------------------------------------------------
 ;; Demographic simulation
@@ -754,47 +755,47 @@
             (:dish choice)]
 
         (assoc
-          base
-          :topping (:topping dish)
-          :positioning (:positioning choice)
-          :price (double (:price dish))
-          :unit-cost (dish-cost catalog dish)
+         base
+         :topping (:topping dish)
+         :positioning (:positioning choice)
+         :price (double (:price dish))
+         :unit-cost (dish-cost catalog dish)
          :unit-margin (dish-margin catalog dish)
          :order-value-multiplier (:order-value-multiplier choice 1.0)
          :revenue (* sales
-                      (double (:price dish))
-                      (:order-value-multiplier choice 1.0))
-          :profit (* sales
-                     (dish-margin catalog dish)
-                     (:order-value-multiplier choice 1.0))))
+                     (double (:price dish))
+                     (:order-value-multiplier choice 1.0))
+         :profit (* sales
+                    (dish-margin catalog dish)
+                    (:order-value-multiplier choice 1.0))))
 
       (assoc
-        base
-        :revenue 0.0
-        :profit 0.0))))
+       base
+       :revenue 0.0
+       :profit 0.0))))
 
 (defn simulate-demographic
   [rules catalog market players demographic]
   (let [potential-demand
         (long
-          (Math/round
-            (* (double (:population demographic))
-               (double (:eat-rate demographic)))))
+         (Math/round
+          (* (double (:population demographic))
+             (double (:eat-rate demographic)))))
 
         beta
         (double
-          (get rules
-               :choice-beta
-               3.0))
+         (get rules
+              :choice-beta
+              3.0))
 
         player-options
         (mapv
-          #(best-offer
-             rules
-             market
-             demographic
-             %)
-          players)
+         #(best-offer
+           rules
+           market
+           demographic
+           %)
+         players)
 
         options
         (conj player-options
@@ -807,22 +808,22 @@
 
         allocations
         (mapv
-          (fn [[choice sales]]
-            (allocate-choice catalog demographic choice sales))
-          (allocate-orders potential-demand choices))
+         (fn [[choice sales]]
+           (allocate-choice catalog demographic choice sales))
+         (allocate-orders potential-demand choices))
 
         purchases
         (filter
-          #(= :purchase
-              (:kind %))
-          allocations)
+         #(= :purchase
+             (:kind %))
+         allocations)
 
         outside
         (first
-          (filter
-            #(= :outside
-                (:kind %))
-            allocations))]
+         (filter
+          #(= :outside
+              (:kind %))
+          allocations))]
 
     {:demographic-id (:id demographic)
      :population (:population demographic)
@@ -859,9 +860,9 @@
   [players]
   (into {}
         (map
-          (fn [player]
-            [(:id player)
-             empty-stats]))
+         (fn [player]
+           [(:id player)
+            empty-stats]))
         players))
 
 (defn add-allocation
@@ -878,58 +879,58 @@
     stats
     (-> stats
         (update-in
-          [player-id :sales]
-          (fnil + 0)
-          sales)
+         [player-id :sales]
+         (fnil + 0)
+         sales)
 
         (update-in
-          [player-id :revenue]
-          (fnil + 0.0)
-          revenue)
+         [player-id :revenue]
+         (fnil + 0.0)
+         revenue)
 
         (update-in
-          [player-id :profit]
-          (fnil + 0.0)
-          profit)
+         [player-id :profit]
+         (fnil + 0.0)
+         profit)
 
         (update-in
-          [player-id :dish-sales dish-id]
-          (fnil + 0)
-          sales)
+         [player-id :dish-sales dish-id]
+         (fnil + 0)
+         sales)
 
         (update-in
-          [player-id
+         [player-id
           :demographic-sales
-           demographic-id]
-          (fnil + 0)
-          sales))))
+          demographic-id]
+         (fnil + 0)
+         sales))))
 
 (defn update-player
   [player stats]
   (-> player
       ;; Money changes by profit, not revenue.
       (update
-        :money
-        (fnil + 0.0)
-        (:profit stats))
+       :money
+       (fnil + 0.0)
+       (:profit stats))
 
       ;; Every sold dish produces one prestige.
       (update
-        :prestige
-        (fnil + 0)
-        (:sales stats))
+       :prestige
+       (fnil + 0)
+       (:sales stats))
 
       (assoc
-        :last-tick
-        stats)
+       :last-tick
+       stats)
 
       ;; Keep durable totals separate from the latest-tick receipt. The stats
       ;; page can use this without replaying every historical game tick.
       (update :game-stats add-demographic-sales (:demographic-sales stats))
 
       (update
-        :effects
-        tick-effects)))
+       :effects
+       tick-effects)))
 
 ;; ---------------------------------------------------------------------------
 ;; Market memory
@@ -939,15 +940,15 @@
   [values allocations value-key]
   (let [totals
         (reduce
-          (fn [result allocation]
-            (update
-              result
-              (get allocation value-key)
-              (fnil + 0.0)
-              (double (:sales allocation))))
-          (zipmap values
-                  (repeat 0.0))
-          allocations)
+         (fn [result allocation]
+           (update
+            result
+            (get allocation value-key)
+            (fnil + 0.0)
+            (double (:sales allocation))))
+         (zipmap values
+                 (repeat 0.0))
+         allocations)
 
         total-sales
         (reduce + 0.0
@@ -956,9 +957,9 @@
     (when (pos? total-sales)
       (into {}
             (map
-              (fn [[value sales]]
-                [value
-                 (/ sales total-sales)]))
+             (fn [[value sales]]
+               [value
+                (/ sales total-sales)]))
             totals))))
 
 (defn observed-price
@@ -970,12 +971,12 @@
 
     (when (pos? total-sales)
       (/ (reduce
-           + 0.0
-           (map
-             (fn [{:keys [price sales]}]
-               (* (double price)
-                  (double sales)))
-             allocations))
+          + 0.0
+          (map
+           (fn [{:keys [price sales]}]
+             (* (double price)
+                (double sales)))
+           allocations))
          total-sales))))
 
 (defn smooth-share-map
@@ -990,18 +991,18 @@
     (if observed
       (into {}
             (map
-              (fn [value]
-                [value
-                 (lerp
-                   (double
-                     (get previous
-                          value
-                          0.0))
-                   (double
-                     (get observed
-                          value
-                          0.0))
-                   alpha)]))
+             (fn [value]
+               [value
+                (lerp
+                 (double
+                  (get previous
+                       value
+                       0.0))
+                 (double
+                  (get observed
+                       value
+                       0.0))
+                 alpha)]))
             values)
 
       previous)))
@@ -1013,100 +1014,100 @@
 
         alpha
         (double
-          (get rules
-               :market-memory-alpha
-               0.10))
+         (get rules
+              :market-memory-alpha
+              0.10))
 
         purchases
         (filter
-          #(= :purchase
-              (:kind %))
-          (:allocations result))
+         #(= :purchase
+             (:kind %))
+         (:allocations result))
 
         toppings
         (keys
-          (get-in demographic
-                  [:preferences :topping]
-                  {}))
+         (get-in demographic
+                 [:preferences :topping]
+                 {}))
 
         observed-toppings
         (observed-share-map
-          toppings
-          purchases
-          :topping)
+         toppings
+         purchases
+         :topping)
 
         observed-positioning
         (observed-share-map
-          (:positioning-categories rules)
-          purchases
-          :positioning)
+         (:positioning-categories rules)
+         purchases
+         :positioning)
 
         observed-anchor
         (observed-price purchases)
 
         previous-anchor
         (market-price-anchor
-          market
-          demographic)]
+         market
+         demographic)]
 
     (-> market
         (assoc-in
-          [:recent-shares
-           demographic-id
-           :topping]
-          (smooth-share-map
-            (get-in market
-                    [:recent-shares
-                     demographic-id
-                     :topping]
-                    {})
-            observed-toppings
-            alpha
-            toppings))
+         [:recent-shares
+          demographic-id
+          :topping]
+         (smooth-share-map
+          (get-in market
+                  [:recent-shares
+                   demographic-id
+                   :topping]
+                  {})
+          observed-toppings
+          alpha
+          toppings))
 
         (assoc-in
-          [:recent-shares
-           demographic-id
-           :positioning]
-          (smooth-share-map
-            (get-in market
-                    [:recent-shares
-                     demographic-id
-                     :positioning]
-                    {})
-            observed-positioning
-            alpha
-            (:positioning-categories rules)))
+         [:recent-shares
+          demographic-id
+          :positioning]
+         (smooth-share-map
+          (get-in market
+                  [:recent-shares
+                   demographic-id
+                   :positioning]
+                  {})
+          observed-positioning
+          alpha
+          (:positioning-categories rules)))
 
         (assoc-in
-          [:price-anchors
-           demographic-id]
-          (if observed-anchor
-            (lerp
-              previous-anchor
-              observed-anchor
-              alpha)
-            previous-anchor)))))
+         [:price-anchors
+          demographic-id]
+         (if observed-anchor
+           (lerp
+            previous-anchor
+            observed-anchor
+            alpha)
+           previous-anchor)))))
 
 (defn update-market
   [rules market demographics results]
   (let [result-by-id
         (into {}
               (map
-                (juxt :demographic-id
-                      identity))
+               (juxt :demographic-id
+                     identity))
               results)]
 
     (reduce
-      (fn [current demographic]
-        (update-market-for-demographic
-          rules
-          current
-          demographic
-          (get result-by-id
-               (:id demographic))))
-      (or market {})
-      demographics)))
+     (fn [current demographic]
+       (update-market-for-demographic
+        rules
+        current
+        demographic
+        (get result-by-id
+             (:id demographic))))
+     (or market {})
+     demographics)))
 
 ;; ---------------------------------------------------------------------------
 ;; Complete tick
@@ -1132,12 +1133,12 @@
         ;; The complete tick uses one immutable snapshot of all player offers.
         results
         (mapv
-          #(simulate-demographic
-             rules catalog
-             (or market {})
-             players
-             %)
-          demographics)
+         #(simulate-demographic
+           rules catalog
+           (or market {})
+           players
+           %)
+         demographics)
 
         allocations
         (mapcat :allocations
@@ -1145,44 +1146,44 @@
 
         stats
         (reduce
-          add-allocation
-          (initial-stats players)
-          allocations)
+         add-allocation
+         (initial-stats players)
+         allocations)
 
         updated-players
         (mapv
-          (fn [player]
-            (update-player
-              player
-              (get stats
-                   (:id player)
-                   empty-stats)))
-          players)
+         (fn [player]
+           (update-player
+            player
+            (get stats
+                 (:id player)
+                 empty-stats)))
+         players)
 
         updated-market
         (update-market
-          rules
-          (or market {})
-          demographics
-          results)
+         rules
+         (or market {})
+         demographics
+         results)
 
         updated-city
         (demographics-simulation/evolve-city city (inc (or tick 0)))]
 
     (assoc
-      state
-      :tick (inc (or tick 0))
-      :players updated-players
-      :market updated-market
-      :city updated-city
-      :last-market results)))
+     state
+     :tick (inc (or tick 0))
+     :players updated-players
+     :market updated-market
+     :city updated-city
+     :last-market results)))
 
 (defn run-ticks
   [state tick-count]
   (nth
-    (iterate simulate-tick
-             state)
-    tick-count))
+   (iterate simulate-tick
+            state)
+   tick-count))
 
 ;; ---------------------------------------------------------------------------
 ;; Sample game
@@ -1207,6 +1208,37 @@
                {:id :normal-ketchup :pommes {:size :small :seasoning :salt} :topping :ketchup :price 4.50}]}]}
    (game-data/simulation-config)))
 
+;; Compare one simulated tick with and without an action. Effects are read
+  ;; from game-data, so these examples follow future balance changes.
+(defn example-state-with-action [state action-id target-player-id]
+  (let [action (game-data/action action-id)]
+    (update state :players
+            (fn [players]
+              (mapv (fn [player]
+                      (if (= target-player-id (:id player))
+                        (update player :effects into
+                                (map #(assoc %
+                                             :action-id action-id
+                                             :ticks-left (:duration action))
+                                     (:effects action)))
+                        player))
+                    players)))))
+
+(defn example-player-result [state player-id]
+  (let [player (some #(when (= player-id (:id %)) %) (:players state))]
+    (select-keys (assoc (:last-tick player) :money (:money player))
+                 [:money :sales :revenue :profit :demographic-sales])))
+
+(defn million-city-state [state]
+  (assoc-in state [:city :initial-population] 1000000))
+
+(defn compare-action-example [sample-state action-id target-player-id]
+  (let [without-effect (simulate-tick sample-state)
+        with-effect (simulate-tick
+                     (example-state-with-action sample-state action-id target-player-id))]
+    {:without-effect (example-player-result without-effect target-player-id)
+     :with-effect (example-player-result with-effect target-player-id)}))
+
 (comment
   ;; Simulate one 30-second tick.
   (def state-1
@@ -1214,32 +1246,32 @@
 
   ;; Inspect player results.
   (mapv
-    #(select-keys
-       %
-       [:id
-        :money
-        :prestige
-        :last-tick])
-    (:players state-1))
+   #(select-keys
+     %
+     [:id
+      :money
+      :prestige
+      :last-tick])
+   (:players state-1))
 
   ;; Inspect why yuppies chose each offer.
   (->> (:last-market state-1)
        (filter
-         #(= :yuppies
-             (:demographic-id %)))
+        #(= :yuppies
+            (:demographic-id %)))
        first
        :allocations
        (mapv
-         #(select-keys
-            %
-            [:kind
-             :player-id
-             :dish-id
-             :utility
-             :components
-             :share
-             :sales
-             :profit])))
+        #(select-keys
+          %
+          [:kind
+           :player-id
+           :dish-id
+           :utility
+           :components
+           :share
+           :sales
+           :profit])))
 
   ;; Five minutes of market adaptation.
   (def state-after-ten-ticks
@@ -1248,64 +1280,36 @@
   ;; Example demographic-specific sabotage.
   (def sabotaged-state
     (update
-      sample-state
-      :players
-      (fn [players]
-        (mapv
-          (fn [player]
-            (if (= :pommes-lab
-                   (:id player))
-              (update
-                player
-                :effects
-                conj
-                {:kind :influencer-scandal
-                 :utility -0.30
-                 :demographics #{:yuppies}
-                 :ticks-left 3})
-              player))
-          players))))
+     sample-state
+     :players
+     (fn [players]
+       (mapv
+        (fn [player]
+          (if (= :pommes-lab
+                 (:id player))
+            (update
+             player
+             :effects
+             conj
+             {:kind :influencer-scandal
+              :utility -0.30
+              :demographics #{:yuppies}
+              :ticks-left 3})
+            player))
+        players))))
 
-  sample-state
+  (def s (million-city-state sample-state))
 
-  ;; Compare one simulated tick with and without an action. Effects are read
-  ;; from game-data, so these examples follow future balance changes.
-  (defn example-state-with-action [state action-id target-player-id]
-        (let [action (game-data/action action-id)]
-          (update state :players
-                  (fn [players]
-                      (mapv (fn [player]
-                                (if (= target-player-id (:id player))
-                                    (update player :effects into
-                                            (map #(assoc %
-                                                         :action-id action-id
-                                                         :ticks-left (:duration action))
-                                                 (:effects action)))
-                                  player))
-                            players)))))
-
-  (defn example-player-result [state player-id]
-    (let [player (some #(when (= player-id (:id %)) %) (:players state))]
-      (select-keys (assoc (:last-tick player) :money (:money player))
-                   [:money :sales :revenue :profit :demographic-sales])))
-
-  (defn compare-action-example [action-id target-player-id]
-    (let [without-effect (simulate-tick sample-state)
-          with-effect (simulate-tick
-                       (example-state-with-action sample-state action-id target-player-id))]
-      {:without-effect (example-player-result without-effect target-player-id)
-       :with-effect (example-player-result with-effect target-player-id)}))
+  (:city s)
 
   ;; Send Punks affects a rival. Compare Pommes Lab's student/family/retiree sales.
   (def send-punks-example
-    (compare-action-example :send-punks :pommes-lab))
+    (compare-action-example s :send-punks :pommes-lab))
 
   ;; Rocker Meeting attracts students but makes each successful order 20% larger.
   (def rocker-meeting-example
-    (compare-action-example :rocker-meeting :fritza))
+    (compare-action-example s :rocker-meeting :fritza))
 
   ;; Influencer Visit attracts yuppies and foodies while increasing price tolerance.
   (def influencer-visit-example
-    (compare-action-example :influencer-visit :pommes-lab))
-
-  )
+    (compare-action-example s :influencer-visit :pommes-lab)))
