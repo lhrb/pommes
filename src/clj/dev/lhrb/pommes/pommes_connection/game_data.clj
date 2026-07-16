@@ -74,6 +74,39 @@
      :effects [{:type :demographic-attraction :demographic :yuppies :modifier 0.35}
                {:type :demographic-attraction :demographic :foodies :modifier 0.25}
                {:type :price-tolerance :modifier 0.15}]}
+    :parking-chaos
+    {:id :parking-chaos
+     :name "Parking Chaos"
+     :target :other-player
+     :duration 15
+     :cooldown 21
+     :cost {:income-multiplier 1.5 :cash-ratio 0.002}
+     :effects [{:type :demographic-repulsion :demographic :families :modifier 0.25}
+               {:type :demographic-repulsion :demographic :retirees :modifier 0.20}
+               {:type :global-attraction :modifier -0.10}
+               {:type :average-order-size :modifier -0.10}]}
+    :review-bomb
+    {:id :review-bomb
+     :name "Review Bomb"
+     :target :other-player
+     :duration 9
+     :cooldown 21
+     :cost {:income-multiplier 1.25 :cash-ratio 0.00175}
+     :effects [{:type :demographic-repulsion :demographic :yuppies :modifier 0.25}
+               {:type :demographic-repulsion :demographic :foodies :modifier 0.25}
+               {:type :global-attraction :modifier -0.10}
+               {:type :price-tolerance :modifier -0.15}]}
+    :neighborhood-festival
+    {:id :neighborhood-festival
+     :name "Neighborhood Festival"
+     :target :any-player
+     :duration 12
+     :cooldown 18
+     :cost {:income-multiplier 1.0 :cash-ratio 0.0015}
+     :effects [{:type :global-attraction :modifier 0.10}
+               {:type :demographic-attraction :demographic :families :modifier 0.15}
+               {:type :average-order-size :modifier 0.10}
+               {:type :price-tolerance :modifier 0.10}]}
     :cost {:minimum 20.0}}
 
    :market

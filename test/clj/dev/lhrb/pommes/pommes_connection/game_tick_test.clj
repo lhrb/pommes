@@ -51,9 +51,10 @@
     (is (= -0.15 (simulation/temporary-effect-utility player family)))))
 
 (deftest action-costs-scale-with-income-and-cash
-  (is (= [300000.0 162000.0 112500.0]
+  (is (= [300000.0 162000.0 112500.0 225000.0 189000.0 162000.0]
          (mapv #(game-repository/action-cost (game-data/action %) 150000.0 108000000.0)
-               [:send-punks :rocker-meeting :influencer-visit])))
+               [:send-punks :rocker-meeting :influencer-visit
+                :parking-chaos :review-bomb :neighborhood-festival])))
   (is (= 20.0
          (game-repository/action-cost (game-data/action :send-punks) 0.0 0.0))))
 
@@ -307,13 +308,19 @@
                                                           :player-name "Bea"))
             invalid-punks (game-repository/purchase-action! datasource ada :send-punks ada)
             invalid-rocker (game-repository/purchase-action! datasource ada :rocker-meeting ada)
+            festival-self (game-repository/purchase-action! datasource ada :neighborhood-festival ada)
+            reset-money-after-festival
+            (jdbc/execute-one! datasource ["UPDATE game_players SET money = 20 WHERE id = ?" ada]
+                               query-options)
             influencer-self (game-repository/purchase-action! datasource ada :influencer-visit ada)
-            _ (jdbc/execute-one! datasource ["UPDATE game_players SET money = 20 WHERE id = ?" ada]
-                                 query-options)
+            reset-money-after-influencer
+            (jdbc/execute-one! datasource ["UPDATE game_players SET money = 20 WHERE id = ?" ada]
+                               query-options)
             purchase (game-repository/purchase-action! datasource ada :send-punks bea)
             repeat-purchase (game-repository/purchase-action! datasource ada :send-punks bea)]
         (is (= :invalid-target (:error invalid-punks)))
         (is (= :invalid-target (:error invalid-rocker)))
+        (is (= {:ok true :cost 20.0 :apply-at-tick 1} festival-self))
         (is (= {:ok true :cost 20.0 :apply-at-tick 1} influencer-self))
         (is (= {:ok true :cost 20.0 :apply-at-tick 1} purchase))
         (is (= :cooldown (:error repeat-purchase)))

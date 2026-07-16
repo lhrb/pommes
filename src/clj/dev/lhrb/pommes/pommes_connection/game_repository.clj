@@ -523,4 +523,17 @@
 
 (comment
   ;; (schedule-setup! datasource game-player-id {:interior :cozy :dishes [...]})
+
+  ;; Action costs use the highest of the €20 minimum, revenue share, and cash share.
+  (action-cost (game-data/action :send-punks) 0.0 0.0)
+  ;; => 20.0
+
+  (action-cost (game-data/action :send-punks) 150000.0 108000000.0)
+  ;; => 300000.0
+
+  (action-cost (game-data/action :parking-chaos) 150000.0 108000000.0)
+  ;; => 225000.0
+
+  (action-cost (game-data/action :review-bomb) 150000.0 108000000.0)
+  ;; => 189000.0
   )

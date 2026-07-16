@@ -12,13 +12,22 @@
     :office-workers "Büromenschen" :yuppies "Yuppies" :foodies "Feinschmeckerinnen und Feinschmecker"}
    value (-> value name (str/replace #"-" " ") str/capitalize)))
 
+(defn- percent [modifier]
+  (str (format "%.0f" (* 100.0 (Math/abs (double modifier)))) "%"))
+
 (defn- effect-label [{:keys [type demographic modifier]}]
   (case type
     :demographic-attraction (str (if (neg? modifier) "Weniger " "Mehr ") (label demographic))
     :demographic-repulsion (str "Weniger " (label demographic))
-    :global-attraction "15% weniger Anziehung für alle"
-    :average-order-size "20% größere Bestellungen"
-    :price-tolerance "15% mehr Preistoleranz"
+    :global-attraction (str (percent modifier) (if (neg? modifier)
+                                                   " weniger Anziehung für alle"
+                                                   " mehr Anziehung für alle"))
+    :average-order-size (str (percent modifier) (if (neg? modifier)
+                                                    " kleinere Bestellungen"
+                                                    " größere Bestellungen"))
+    :price-tolerance (str (percent modifier) (if (neg? modifier)
+                                                 " weniger Preistoleranz"
+                                                 " mehr Preistoleranz"))
     (name type)))
 
 (defn- target-options [action viewer players]
