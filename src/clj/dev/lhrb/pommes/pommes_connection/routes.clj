@@ -9,6 +9,7 @@
    [dev.lhrb.pommes.pommes-connection.views.dashboard :as dashboard]
    [dev.lhrb.pommes.pommes-connection.views.dishes :as dishes-view]
    [dev.lhrb.pommes.pommes-connection.views.game :as game-view]
+   [dev.lhrb.pommes.pommes-connection.views.research :as research-view]
    [integrant.core :as ig]
    [reitit.ring :as ring]
    [hiccup2.core :as h]
@@ -198,6 +199,41 @@
            (str location "action-result=invalid"))))
       (response/status (response/response "Log in to access this game.") 401))))
 
+(defn- research-id [value]
+  (some-> value str keyword))
+
+(defn- research-notice [params]
+  (case (:research-result params)
+    "purchased" ["good" (str "Forschung auf Stufe " (:level params) " verbessert.")]
+    "funds" ["error" "Dafür reicht deine Buden-Kasse nicht."]
+    "maximum" ["warning" "Dieses Projekt ist bereits ausgereizt."]
+    "invalid" ["error" "Dieses Forschungsprojekt gibt es nicht."]
+    nil))
+
+(defn- research-page [datasource request]
+  (if-let [data (authorized-data datasource request)]
+    (research-view/page (assoc data
+                               :research (game-repository/research-statuses
+                                          datasource (get-in data [:game :id]) (get-in data [:viewer :id])
+                                          (get-in data [:viewer :money]))
+                               :notice (research-notice (:params request))
+                               :anti-forgery-token (:anti-forgery-token request)))
+    (response/status (response/response "Log in to access this game.") 401)))
+
+(defn- purchase-research [datasource request]
+  (let [game-token (get-in request [:path-params :game-token])]
+    (if-let [data (authorized-data datasource request)]
+      (let [result (game-repository/purchase-research! datasource (get-in data [:viewer :id])
+                                                        (research-id (get-in request [:params :research-id])))
+            location (str "/games/" (game-repository/normalize-token game-token) "/research?")]
+        (response/redirect
+         (case (:error result)
+           nil (str location "research-result=purchased&level=" (:level result))
+           :insufficient-funds (str location "research-result=funds")
+           :maximum-level (str location "research-result=maximum")
+           (str location "research-result=invalid"))))
+      (response/status (response/response "Log in to access this game.") 401))))
+
 (defn- create-game-page [request]
   (access-view/create-page {:anti-forgery-token (:anti-forgery-token request)}))
 
@@ -285,7 +321,10 @@
      {:post (fn [request] (preview-dishes datasource request))}]
     ["/games/:game-token/actions"
      {:get (fn [request] (actions-page datasource request))
-      :post (fn [request] (purchase-action datasource request))}]]))
+      :post (fn [request] (purchase-action datasource request))}]
+    ["/games/:game-token/research"
+     {:get (fn [request] (research-page datasource request))
+      :post (fn [request] (purchase-research datasource request))}]]))
 
 (comment
   ;; Add feature routes here as the corresponding feature is implemented.

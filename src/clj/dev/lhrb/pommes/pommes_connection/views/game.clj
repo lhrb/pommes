@@ -74,6 +74,11 @@
                          [:p "Schick Gerüchte, Rocker oder Influencer los und bring den Markt durcheinander."]
                          [:a.button {:href (str "/games/" (:game-token game) "/actions")}
                           "Aktionen öffnen"]])
+          (layout/panel "panel--yellow"
+                        [[:h2 "Forschung & Stammgäste"]
+                         [:p "Verbessere deine Pommes und baue dir eine treue Kundschaft auf."]
+                         [:a.button {:href (str "/games/" (:game-token game) "/research")}
+                          "Forschung öffnen"]])
           (layout/panel "panel--tight"
                         [[:h2 "Rivalenradar"]
                          [:p.meta "Gerücht: Irgendwer um die Ecke denkt schon wieder über Rabatt nach."]

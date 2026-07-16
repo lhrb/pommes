@@ -193,6 +193,22 @@
                         game-player-id]
                        query-options)))
 
+(defn- load-regulars [connectable game-player-id]
+  (into {}
+        (map (juxt #(keyword (:demographic-id %)) :count))
+        (jdbc/execute! connectable
+                       ["SELECT demographic_id, count FROM player_regulars WHERE game_player_id = ?"
+                        game-player-id]
+                       query-options)))
+
+(defn- load-research [connectable game-player-id]
+  (into {}
+        (map (juxt #(keyword (:research-id %)) :level))
+        (jdbc/execute! connectable
+                       ["SELECT research_id, level FROM player_research WHERE game_player_id = ?"
+                        game-player-id]
+                       query-options)))
+
 (defn load-game-state
   [connectable game-id simulation-config]
   (let [game (jdbc/execute-one! connectable
@@ -221,6 +237,8 @@
                        :interior (keyword (:interior player))
                        :effects (decode (:active-effects player))
                        :game-stats (decode (:game-stats player))
+                       :regulars (load-regulars connectable (:id player))
+                       :research (load-research connectable (:id player))
                        :dishes (load-dishes connectable (:id player))})
                     players)}))))
 
@@ -266,6 +284,8 @@
                   :prestige (:prestige game-player)
                   :interior (keyword (:interior game-player))
                   :effects (decode (:active-effects game-player))
+                  :regulars (load-regulars connectable (:id game-player))
+                  :research (load-research connectable (:id game-player))
                   :dishes (load-dishes connectable (:id game-player))}
          :players (mapv #(assoc % :name (:player-name %)) players)
          :city (if-let [city-state (:city-state game)]
@@ -335,6 +355,74 @@
                            (* (double cash-ratio)
                               (double (or money 0.0))))))
        100.0)))
+
+(defn research-cost [level]
+  (let [{:keys [base multiplier]} (get-in game-data/game-data [:research :cost])]
+    (/ (Math/round (* 100.0 (double base) (Math/pow (double multiplier) (long level)))) 100.0)))
+
+(defn research-statuses
+  [connectable game-id game-player-id money]
+  (let [levels (load-research connectable game-player-id)
+        maximum-level (get-in game-data/game-data [:research :cost :maximum-level])
+        leaders (into {}
+                      (for [[research-id _] (game-data/research-items)]
+                        [research-id
+                         (jdbc/execute! connectable
+                                        ["SELECT game_players.player_name, coalesce(player_research.level, 0) AS level
+                                               FROM game_players
+                                               LEFT JOIN player_research
+                                                 ON player_research.game_player_id = game_players.id
+                                                AND player_research.research_id = ?
+                                               WHERE game_players.game_id = ?
+                                                 AND coalesce(player_research.level, 0) = (SELECT max(coalesce(pr.level, 0))
+                                                                                             FROM game_players gp
+                                                                                             LEFT JOIN player_research pr
+                                                                                               ON pr.game_player_id = gp.id
+                                                                                              AND pr.research_id = ?
+                                                                                             WHERE gp.game_id = ?)
+                                               ORDER BY game_players.player_name"
+                                         (name research-id) game-id (name research-id) game-id]
+                                        query-options)]))]
+    (mapv (fn [[research-id item]]
+            (let [level (long (get levels research-id 0))
+                  cost (research-cost level)]
+              (assoc item :level level :cost cost :maximum-level maximum-level
+                     :available? (and (< level maximum-level) (>= (double money) cost))
+                     :leaders (get leaders research-id))))
+          (game-data/research-items))))
+
+(defn purchase-research!
+  [datasource game-player-id research-id]
+  (jdbc/with-transaction [tx datasource]
+    (enable-foreign-keys! tx)
+    (let [item (game-data/research-item research-id)
+          maximum-level (get-in game-data/game-data [:research :cost :maximum-level])
+          player (jdbc/execute-one! tx
+                                    ["SELECT id, money FROM game_players WHERE id = ?" game-player-id]
+                                    query-options)
+          level (long (get (load-research tx game-player-id) research-id 0))
+          cost (research-cost level)]
+      (cond
+        (nil? player) {:error :player-not-found}
+        (nil? item) {:error :unknown-research}
+        (>= level maximum-level) {:error :maximum-level}
+        (< (double (:money player)) cost) {:error :insufficient-funds :cost cost}
+        :else
+        (let [updated (jdbc/execute-one! tx
+                                         ["UPDATE game_players SET money = money - ? WHERE id = ? AND money >= ?"
+                                          cost game-player-id cost]
+                                         query-options)]
+          (if (zero? (long (or (:next.jdbc/update-count updated) 0)))
+            {:error :insufficient-funds :cost cost}
+            (do
+              (jdbc/execute-one! tx
+                                 ["INSERT INTO player_research (game_player_id, research_id, level)
+                                   VALUES (?, ?, 1)
+                                   ON CONFLICT (game_player_id, research_id)
+                                   DO UPDATE SET level = player_research.level + 1"
+                                  game-player-id (name research-id)]
+                                 query-options)
+              {:ok true :cost cost :level (inc level)})))))))
 
 (defn- last-player-revenue
   [connectable game-id game-player-id]
@@ -494,6 +582,17 @@
                          WHERE id = ?"
                         (:money player) (:prestige player) (name (:interior player))
                         (encode (:effects player)) (encode (:game-stats player)) (:id player)]
+                       query-options))
+  (jdbc/execute-one! connectable
+                     ["DELETE FROM player_regulars WHERE game_player_id IN
+                       (SELECT id FROM game_players WHERE game_id = ?)" (:game-id state)]
+                     query-options)
+  (doseq [player (:players state)
+          [demographic-id count] (:regulars player)
+          :when (pos? count)]
+    (jdbc/execute-one! connectable
+                       ["INSERT INTO player_regulars (game_player_id, demographic_id, count) VALUES (?, ?, ?)"
+                        (:id player) (name demographic-id) count]
                        query-options))
   (jdbc/execute-one! connectable
                      ["DELETE FROM player_dishes

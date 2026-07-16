@@ -11,6 +11,32 @@
     :premium-price-ratio 1.40
     :positioning-categories [:budget :mainstream :premium]}
 
+   :regulars
+   {:base-conversion-chance 0.03
+    :loss-rate 0.001
+    :maximum-population-share 0.20}
+
+   :research
+   {:cost {:base 20.0 :multiplier 2.0 :maximum-level 25}
+    :items
+    {:potato-quality {:id :potato-quality :name "Kartoffelqualität"
+                      :description "Zufriedene Gäste werden eher Stammgäste."
+                      :effect :conversion :maximum-modifier 0.30}
+     :fryer {:id :fryer :name "Fritteuse"
+              :description "Konstantere Pommes überzeugen neue Stammgäste."
+              :effect :conversion :maximum-modifier 0.30}
+     :fry-grease {:id :fry-grease :name "Frittierfett"
+                   :description "Stammgäste kommen zuverlässiger wieder."
+                   :effect :reliability :maximum-modifier 0.30}
+     :ketchup-recipe {:id :ketchup-recipe :name "Ketchup-Rezept"
+                      :description "Ketchup-Stammgäste bestellen wertvoller."
+                      :effect :order-value :toppings #{:ketchup :ketchup-mayo :curry-ketchup}
+                      :maximum-modifier 0.30}
+     :mayo-recipe {:id :mayo-recipe :name "Mayo-Rezept"
+                   :description "Mayo-Stammgäste bestellen wertvoller."
+                   :effect :order-value :toppings #{:mayo :ketchup-mayo :garlic-sauce}
+                   :maximum-modifier 0.30}}}
+
    :catalog
    {:sizes {:small {:cost 0.55}
             :medium {:cost 0.70}
@@ -223,7 +249,7 @@
        :interior {:classic 0.3 :modern 0.8 :cozy 0.8 :street-food 0.7 :premium 1.0}}}]}})
 
 (defn simulation-config []
-  (select-keys game-data [:rules :catalog :city :market]))
+  (select-keys game-data [:rules :regulars :research :catalog :city :market]))
 
 (defn starter-setup []
   (get-in game-data [:setup :starter]))
@@ -233,6 +259,12 @@
 
 (defn action [action-id]
   (get (actions) action-id))
+
+(defn research-items []
+  (get-in game-data [:research :items]))
+
+(defn research-item [research-id]
+  (get (research-items) research-id))
 
 (comment
   ;; Add a topping, interior, or demographic by editing game-data.

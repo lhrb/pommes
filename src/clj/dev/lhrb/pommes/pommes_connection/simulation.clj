@@ -2,6 +2,7 @@
   (:require
    [dev.lhrb.pommes.pommes-connection.demographics-simulation :as demographics-simulation]
    [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
+   [dev.lhrb.pommes.pommes-connection.regulars-simulation :as regulars]
    [integrant.repl.state :as state]))
 
 ;; Each tick assigns a whole number of customers to offers. Softmax shares
@@ -747,6 +748,7 @@
          :utility (:utility choice)
          :components (:components choice)
          :share (:share choice)
+         :source (:source choice :ordinary)
          :sales sales}]
 
     (if (= :purchase
@@ -846,6 +848,7 @@
 
 (def empty-stats
   {:sales 0
+   :regular-sales 0
    :revenue 0.0
    :profit 0.0
    :dish-sales {}
@@ -874,32 +877,29 @@
            demographic-id
            sales
            revenue
-           profit]}]
+           profit
+           source]}]
 
   (if (= kind :outside)
     stats
-    (-> stats
-        (update-in
+    (cond-> (update-in stats
          [player-id :sales]
          (fnil + 0)
          sales)
-
-        (update-in
+      (= :regular source) (update-in [player-id :regular-sales] (fnil + 0) sales)
+      :always (update-in
          [player-id :revenue]
          (fnil + 0.0)
          revenue)
-
-        (update-in
+      :always (update-in
          [player-id :profit]
          (fnil + 0.0)
          profit)
-
-        (update-in
+      :always (update-in
          [player-id :dish-sales dish-id]
          (fnil + 0)
          sales)
-
-        (update-in
+      :always (update-in
          [player-id
           :demographic-sales
           demographic-id]
@@ -1132,6 +1132,26 @@
         (:demographics city)
 
         ;; The complete tick uses one immutable snapshot of all player offers.
+        offers
+        (into {}
+              (for [demographic demographics
+                    player players]
+                [[(:id player) (:id demographic)]
+                 (best-offer rules (or market {}) demographic player)]))
+
+        prepared-regulars
+        (regulars/prepare-regulars (:regulars state) (get-in state [:research :items])
+                                   demographics players offers)
+
+        available-demographics
+        (mapv (fn [demographic]
+                (let [assigned (reduce + 0
+                                       (map (fn [player]
+                                              (get-in prepared-regulars [(:id player) (:id demographic) :count] 0))
+                                            players))]
+                  (update demographic :population #(max 0 (- % assigned)))))
+              demographics)
+
         results
         (mapv
          #(simulate-demographic
@@ -1139,11 +1159,39 @@
            (or market {})
            players
            %)
-         demographics)
+         available-demographics)
+
+        regular-allocations
+        (keep identity
+              (for [demographic demographics
+                    player players]
+                (let [returns (get-in prepared-regulars [(:id player) (:id demographic) :returns] 0)]
+                  (when (pos? returns)
+                    (let [offer (get offers [(:id player) (:id demographic)])
+                          value-modifier (regulars/research-modifier (:research player)
+                                                                      (get-in state [:research :items])
+                                                                      :order-value
+                                                                      (:topping (:dish offer)))]
+                      (allocate-choice catalog demographic
+                                       (-> offer
+                                           (assoc :source :regular)
+                                           (update :order-value-multiplier #(* (or % 1.0)
+                                                                                 (+ 1.0 value-modifier))))
+                                       returns))))))
 
         allocations
-        (mapcat :allocations
-                results)
+        (concat regular-allocations (mapcat :allocations results))
+
+        normal-sales
+        (reduce (fn [totals allocation]
+                  (if (and (= :purchase (:kind allocation)) (= :ordinary (:source allocation)))
+                    (update totals [(:player-id allocation) (:demographic-id allocation)] (fnil + 0) (:sales allocation))
+                    totals))
+                {} allocations)
+
+        updated-regulars
+        (regulars/finalize-regulars (:regulars state) (get-in state [:research :items])
+                                    prepared-regulars players offers normal-sales)
 
         stats
         (reduce
@@ -1154,11 +1202,8 @@
         updated-players
         (mapv
          (fn [player]
-           (update-player
-            player
-            (get stats
-                 (:id player)
-                 empty-stats)))
+           (assoc (update-player player (get stats (:id player) empty-stats))
+                  :regulars (get updated-regulars (:id player) {})))
          players)
 
         updated-market

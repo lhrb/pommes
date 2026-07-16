@@ -58,14 +58,16 @@
   [state]
   {:tick (:tick state)
    :players
-   (mapv (fn [{:keys [id money prestige last-tick]}]
+   (mapv (fn [{:keys [id money prestige regulars last-tick]}]
            {:player-id id
             :sales (:sales last-tick)
+            :regular-sales (:regular-sales last-tick)
             :revenue (:revenue last-tick)
             :profit (:profit last-tick)
             :demographic-sales (:demographic-sales last-tick)
             :money money
-            :prestige prestige})
+            :prestige prestige
+            :regulars regulars})
          (:players state))})
 
 (defn run-next-tick!

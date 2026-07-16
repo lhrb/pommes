@@ -7,6 +7,7 @@
    [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
    [dev.lhrb.pommes.pommes-connection.game-repository :as game-repository]
    [dev.lhrb.pommes.pommes-connection.game-tick :as game-tick]
+   [dev.lhrb.pommes.pommes-connection.regulars-simulation :as regulars]
    [dev.lhrb.pommes.pommes-connection.simulation :as simulation]
    [dev.lhrb.pommes.pommes-connection.routes]
    [dev.lhrb.pommes.pommes-connection.web :as web]
@@ -57,6 +58,20 @@
                 :parking-chaos :review-bomb :neighborhood-festival])))
   (is (= 20.0
          (game-repository/action-cost (game-data/action :send-punks) 0.0 0.0))))
+
+(deftest regulars-are-bounded-and-convert-deterministically
+  (let [rules {:base-conversion-chance 0.03 :loss-rate 0.0 :maximum-population-share 0.20}
+        items {:potato-quality {:effect :conversion :maximum-modifier 0.30}}
+        demographic {:id :locals :population 100 :eat-rate 0.12}
+        offer {:dish {:topping :ketchup} :components {:preference-match 0.8}}
+        player {:id :ada :regulars {:locals 5} :research {:potato-quality 25}}
+        prepared (regulars/prepare-regulars rules items [demographic] [player]
+                                            {[:ada :locals] offer})
+        finalized (regulars/finalize-regulars rules items prepared [player]
+                                              {[:ada :locals] offer} {[:ada :locals] 100})]
+    (is (= 20 (regulars/regular-cap 100 rules)))
+    (is (< (get-in prepared [:ada :locals :returns]) 5))
+    (is (< 5 (get-in finalized [:ada :locals]) 20))))
 
 (deftest game-data-catalog-is-covered-by-demographic-preferences
   (let [catalog (:catalog game-data/game-data)
