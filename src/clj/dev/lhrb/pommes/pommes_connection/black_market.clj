@@ -71,6 +71,7 @@
         updated-game-stats (-> game-stats
                                (assoc :suspicion (if audited? 0.0 suspicion-after-decay)
                                       :audit-penalty-ticks (max 0 remaining-penalty))
+                               (update :audit-count (fnil + 0) (if audited? 1 0))
                                (update :total-tax-paid (fnil + 0.0) tax)
                                (update :total-tax-avoided (fnil + 0.0) tax-avoided))
         receipt (assoc tick-stats

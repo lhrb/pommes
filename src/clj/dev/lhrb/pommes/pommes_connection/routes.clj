@@ -99,6 +99,7 @@
       (game-view/page (assoc data
                              :scheduled-for (get-in request [:params :scheduled-for])
                              :anti-forgery-token (:anti-forgery-token request)
+                             :events (game-repository/load-game-events datasource (get-in data [:game :id]) 5 0)
                              :server-now (System/currentTimeMillis)))
       (response/status (response/response "Log in to access this game.") 401))))
 
@@ -109,6 +110,21 @@
                   (get-in request [:session :game-token]))
                game-player-id)
       (overview datasource game-token game-player-id))))
+
+(defn- chronicle-page [datasource request]
+  (if-let [data (authorized-data datasource request)]
+    (let [page (max 0 (or (some-> (get-in request [:params :page]) number long) 0))
+          page-size 50
+          game-id (get-in data [:game :id])
+          event-count (long (game-repository/game-event-count datasource game-id))
+          page-count (max 1 (long (Math/ceil (/ (double event-count) page-size))))
+          page (min page (dec page-count))]
+      (game-view/chronicle-page
+       (assoc data
+              :events (game-repository/load-game-events datasource game-id page-size (* page page-size))
+              :page page
+              :page-count page-count)))
+    (response/status (response/response "Log in to access this game.") 401)))
 
 (defn- forecast-for [datasource data setup]
   (dish-market/forecast
@@ -353,6 +369,8 @@
       :post (fn [request] (login datasource request))}]
     ["/games/:game-token"
      {:get (fn [request] (player-page datasource request))}]
+    ["/games/:game-token/chronicle"
+     {:get (fn [request] (chronicle-page datasource request))}]
     ["/games/:game-token/dishes"
      {:get (fn [request] (dishes-page datasource request))}]
     ["/games/:game-token/dishes/setup"

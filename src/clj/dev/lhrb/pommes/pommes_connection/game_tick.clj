@@ -2,6 +2,7 @@
   (:require
    [clojure.string :as str]
    [dev.lhrb.pommes.pommes-connection.game-repository :as game-repository]
+   [dev.lhrb.pommes.pommes-connection.game-log :as game-log]
    [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
    [dev.lhrb.pommes.pommes-connection.simulation :as simulation]
    [next.jdbc :as jdbc]))
@@ -89,8 +90,9 @@
            updated-state (assoc (simulation/simulate-tick state-with-actions)
                                 :next-tick-at (+ (:next-tick-at state)
                                                  (tick-millis simulation-config)))
-           summary (tick-summary updated-state)]
-       (game-repository/persist-tick! tx updated-state (mapv :id actions) summary)
+           summary (tick-summary updated-state)
+           events (game-log/events state updated-state actions)]
+       (game-repository/persist-tick! tx updated-state (mapv :id actions) summary events)
        summary))))
 
 (defn run-due-ticks!

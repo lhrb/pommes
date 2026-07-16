@@ -70,6 +70,7 @@
     (is (= (- 60.0 (:tax receipt)) (:profit receipt)))
     (is (pos? (get-in after-first [:game-stats :total-tax-avoided])))
     (is (:audited? audit-receipt))
+    (is (= 1 (get-in after-audit [:game-stats :audit-count])))
     (is (= 2 (:audit-penalty-ticks audit-receipt)))
     (is (= 38.0 (:tax audit-receipt)))
     (is (= 0.0 (:suspicion audit-receipt)))
@@ -439,10 +440,15 @@
         (game-tick/run-next-tick! datasource game-id simulation-config)
         (let [target (jdbc/execute-one! datasource
                                         ["SELECT active_effects FROM game_players WHERE id = ?" bea]
-                                        query-options)]
+                                        query-options)
+              events (jdbc/execute! datasource
+                                    ["SELECT kind, message FROM game_events WHERE game_id = ? ORDER BY id" game-id]
+                                    query-options)]
           (is (= 4 (count (edn/read-string (:active-effects target)))))
           (is (= :demographic-attraction
-                 (:type (first (edn/read-string (:active-effects target))))))))
+                 (:type (first (edn/read-string (:active-effects target))))))
+          (is (some #(= "action" (:kind %)) events))
+          (is (some #(re-find #"Punks zu Bea" (:message %)) events))))
       (finally
         (Files/deleteIfExists database-file)))))
 

@@ -225,7 +225,7 @@
     (when-not game
       (throw (ex-info "Game does not exist" {:game-id game-id})))
     (let [players (jdbc/execute! connectable
-                                 ["SELECT id, money, prestige, interior, active_effects, game_stats
+                                 ["SELECT id, player_name, money, prestige, interior, active_effects, game_stats
                                    FROM game_players WHERE game_id = ? ORDER BY id"
                                   game-id]
                                  query-options)]
@@ -240,6 +240,7 @@
               :players
               (mapv (fn [player]
                       {:id (:id player)
+                       :name (:player-name player)
                        :money (:money player)
                        :prestige (:prestige player)
                        :interior (keyword (:interior player))
@@ -326,6 +327,22 @@
     (some-> (load-player-game-overview connectable (:id game) game-player-id simulation-config)
             (assoc-in [:game :game-token] (:game-token game))
             (assoc-in [:game :invite-token] (:invite-token game)))))
+
+(defn load-game-events
+  [connectable game-id page-size offset]
+  (jdbc/execute! connectable
+                 ["SELECT tick, kind, message, created_at
+                   FROM game_events
+                   WHERE game_id = ?
+                   ORDER BY tick DESC, id DESC
+                   LIMIT ? OFFSET ?"
+                  game-id page-size offset]
+                 query-options))
+
+(defn game-event-count [connectable game-id]
+  (:count (jdbc/execute-one! connectable
+                             ["SELECT count(*) AS count FROM game_events WHERE game_id = ?" game-id]
+                             query-options)))
 
 (defn game-by-invite-token [connectable invite-token]
   (jdbc/execute-one! connectable
@@ -639,7 +656,7 @@
                       query-options)))
 
 (defn persist-tick!
-  [connectable state action-ids summary]
+  [connectable state action-ids summary events]
   (jdbc/execute-one! connectable
                      ["UPDATE games SET tick = ?, market_state = ?, city_state = ?, next_tick_at = ? WHERE id = ?"
                       (:tick state) (encode (:market state)) (encode (:city state))
@@ -687,8 +704,12 @@
                        query-options))
   (jdbc/execute-one! connectable
                      ["INSERT INTO game_ticks (game_id, tick, summary) VALUES (?, ?, ?)"
-                      (:game-id state) (:tick state) (encode summary)]
-                     query-options))
+                      (:game-id state) (:tick state) (encode summary)])
+  (doseq [{:keys [kind message]} events]
+    (jdbc/execute-one! connectable
+                       ["INSERT INTO game_events (game_id, tick, kind, message) VALUES (?, ?, ?, ?)"
+                        (:game-id state) (:tick state) (name kind) message]
+                       query-options)))
 
 (comment
   ;; (schedule-setup! datasource game-player-id {:interior :cozy :dishes [...]})

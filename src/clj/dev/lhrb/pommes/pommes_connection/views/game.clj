@@ -32,8 +32,24 @@
     [:div.stat-row [:span "Buden-Kasse"] [:strong (money (:money player))]]
     [:div.stat-row [:span "Prestige"] [:strong (quantity (:prestige player))]]]))
 
+(defn- chronicle-panel [game events]
+  (layout/panel
+   "panel--tight"
+   [[:div.offer-card__top
+     [:h2 "Stadtchronik"]
+     (layout/badge "Öffentlich")]
+    (if (seq events)
+      [:ol {:style "margin:0;padding-left:20px"}
+       (for [{:keys [tick message]} events]
+         [:li {:style "margin:0 0 10px"}
+          [:strong (str "Tick " tick ": ")]
+          message])]
+      [:p.meta "Noch schreibt die Stadt an ihrer ersten Schlagzeile."])
+    [:a.button {:href (str "/games/" (:game-token game) "/chronicle")}
+     "Ganze Chronik lesen"]]))
+
 (defn page
-  [{:keys [game viewer players latest-tick scheduled-for server-now]}]
+  [{:keys [game viewer players latest-tick scheduled-for server-now events]}]
   (let [viewer-result (viewer-tick-summary latest-tick (:id viewer))]
     (-> (layout/page
          (str (:name game) " | Pommes Connection")
@@ -93,6 +109,7 @@
                         [[:h2 "Rivalenradar"]
                          [:p.meta "Gerücht: Irgendwer um die Ecke denkt schon wieder über Rabatt nach."]
                          [:div.grid.grid--two (map #(player-card % viewer) players)]])
+          (chronicle-panel game events)
           (when viewer-result
             (layout/panel "panel--tight"
                           [[:h2 (str "Quittung für Tick " (:tick latest-tick))]
@@ -109,6 +126,40 @@
         response/response
         (response/content-type "text/html; charset=utf-8"))))
 
+(defn chronicle-page
+  [{:keys [game events page page-count]}]
+  (let [navigation
+        (when (> page-count 1)
+          [:nav {:aria-label "Chronikseiten" :style "display:flex;gap:12px;margin-top:18px"}
+           (when (pos? page)
+             [:a.button {:href (str "/games/" (:game-token game) "/chronicle?page=" (dec page))}
+              "Neuere Meldungen"])
+           (when (< (inc page) page-count)
+             [:a.button {:href (str "/games/" (:game-token game) "/chronicle?page=" (inc page))}
+              "Ältere Meldungen"])])]
+    (-> (layout/page
+         (str (:name game) " | Stadtchronik")
+         [:main
+          [:header.masthead
+           [:p.eyebrow "Pommes Connection · Lokalausgabe"]
+           [:h1 "Stadtchronik"]
+           [:p.subhead (:name game) " · Was die Stadt nie vergessen wird."]
+           [:p.meta [:a {:href (str "/games/" (:game-token game))} "← Zur Budenübersicht"]]]
+          (layout/panel
+           "panel--yellow"
+           [[:h2 "Die Schlagzeilen"]
+            (if (seq events)
+              [:ol {:style "margin:0;padding-left:20px"}
+               (for [{:keys [tick message]} events]
+                 [:li {:style "margin:0 0 14px"}
+                  [:strong (str "Tick " tick " · ")]
+                  message])]
+              [:p "Noch keine Ereignisse. Die Stadt sammelt Material."])
+            navigation])])
+        response/response
+        (response/content-type "text/html; charset=utf-8"))))
+
 (comment
   ;; (page {:game {:id 1 :name "Lunch rush" :tick 0} :viewer {:id 1 :name "Ada"}})
+  ;; (chronicle-page {:game {:name "Lunch" :game-token "ABC123"} :events [] :page 0 :page-count 0})
   )
