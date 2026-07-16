@@ -134,6 +134,21 @@
 ;; Base demographic preferences
 ;; ---------------------------------------------------------------------------
 
+(defn effect-applies?
+  [effect demographic]
+  (or (and (nil? (:demographic effect))
+           (nil? (:demographics effect)))
+      (= (:demographic effect) (:id demographic))
+      (contains? (:demographics effect) (:id demographic))))
+
+(defn effect-modifier
+  [player type demographic]
+  (reduce + 0.0
+          (for [effect (:effects player)
+                :when (and (= type (:type effect))
+                           (effect-applies? effect demographic))]
+            (double (:modifier effect 0.0)))))
+
 (defn price-score
   "Scores the absolute price for a demographic.
 
@@ -146,7 +161,7 @@
    :status
    Also prefers a price near :ideal. Being expensive compared with competitors
    is handled separately by status-utility."
-  [demographic dish]
+  [demographic player dish]
   (let [price-preferences
         (get-in demographic
                 [:preferences :price])
@@ -155,16 +170,17 @@
         (:model price-preferences)
 
         price
-        (double (:price dish))]
+        (double (:price dish))
+
+        tolerance-multiplier
+        (+ 1.0 (effect-modifier player :price-tolerance demographic))]
 
     (case model
       :cheap
       (let [max-price
             (max 0.01
-                 (double
-                   (get price-preferences
-                        :max
-                        5.0)))]
+                 (* (double (get price-preferences :max 5.0))
+                    tolerance-multiplier))]
 
         (clamp -1.0
                1.0
@@ -179,9 +195,8 @@
                :ideal
                5.0))
         (double
-          (get price-preferences
-               :tolerance
-               2.0)))
+          (* tolerance-multiplier
+             (double (get price-preferences :tolerance 2.0)))))
 
       :status
       (ideal-score
@@ -191,9 +206,8 @@
                :ideal
                8.0))
         (double
-          (get price-preferences
-               :tolerance
-               3.0)))
+          (* tolerance-multiplier
+             (double (get price-preferences :tolerance 3.0)))))
 
       0.0)))
 
@@ -224,7 +238,7 @@
                0.0))
 
      :price
-     (price-score demographic dish)
+     (price-score demographic player dish)
 
      :interior
      (double
@@ -487,13 +501,6 @@
 ;; Temporary effects and sabotage
 ;; ---------------------------------------------------------------------------
 
-(defn effect-applies?
-  [effect demographic]
-  (or (nil? (:demographics effect))
-      (contains?
-        (:demographics effect)
-        (:id demographic))))
-
 (defn temporary-effect-utility
   [player demographic]
   (+ (double
@@ -508,16 +515,13 @@
                 (:id demographic)]
                0.0))
 
-     (reduce
-       + 0.0
-       (for [effect (:effects player)
-             :when (effect-applies?
-                     effect
-                     demographic)]
-         (double
-           (get effect
-                :utility
-                0.0))))))
+     (reduce + 0.0
+             (for [effect (:effects player)
+                   :when (effect-applies? effect demographic)]
+               (case (:type effect)
+                 :demographic-attraction (double (:modifier effect 0.0))
+                 :demographic-repulsion (- (double (:modifier effect 0.0)))
+                 (double (:utility effect 0.0)))))))
 
 (defn tick-effects
   [effects]
@@ -639,6 +643,8 @@
                 dish)
 
               :components components
+              :order-value-multiplier
+              (+ 1.0 (effect-modifier player :average-order-size demographic))
               :utility (:total components)})))
        (apply max-key :utility)))
 
@@ -753,11 +759,14 @@
           :positioning (:positioning choice)
           :price (double (:price dish))
           :unit-cost (dish-cost catalog dish)
-          :unit-margin (dish-margin catalog dish)
-          :revenue (* sales
-                      (double (:price dish)))
+         :unit-margin (dish-margin catalog dish)
+         :order-value-multiplier (:order-value-multiplier choice 1.0)
+         :revenue (* sales
+                      (double (:price dish))
+                      (:order-value-multiplier choice 1.0))
           :profit (* sales
-                     (dish-margin catalog dish))))
+                     (dish-margin catalog dish)
+                     (:order-value-multiplier choice 1.0))))
 
       (assoc
         base

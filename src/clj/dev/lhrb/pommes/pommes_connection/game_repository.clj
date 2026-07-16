@@ -322,6 +322,121 @@
                            query-options)
         apply-at-tick))))
 
+(defn action-cost
+  [last-revenue]
+  (let [{:keys [revenue-ratio minimum]}
+        (get-in game-data/game-data [:actions :cost])]
+    (/ (Math/round (* 100.0
+                      (max (double minimum)
+                           (* (double revenue-ratio)
+                              (double (or last-revenue 0.0))))))
+       100.0)))
+
+(defn- last-player-revenue
+  [connectable game-id game-player-id]
+  (when-let [tick (jdbc/execute-one! connectable
+                                     ["SELECT summary FROM game_ticks
+                                       WHERE game_id = ? ORDER BY tick DESC LIMIT 1"
+                                      game-id]
+                                     query-options)]
+    (some (fn [player]
+            (when (= game-player-id (:player-id player))
+              (:revenue player)))
+          (:players (decode (:summary tick))))))
+
+(defn action-statuses
+  [connectable game-id game-player-id tick]
+  (let [last-revenue (or (last-player-revenue connectable game-id game-player-id) 0.0)
+        latest-use (into {}
+                         (map (juxt #(keyword (:action-id %)) :purchase-tick))
+                         (jdbc/execute! connectable
+                                        ["SELECT action_id, max(purchase_tick) AS purchase_tick
+                                          FROM game_action_uses
+                                          WHERE actor_game_player_id = ?
+                                          GROUP BY action_id"
+                                         game-player-id]
+                                        query-options))]
+    (mapv (fn [[action-id action]]
+            (let [available-at (+ (long (get latest-use action-id -1000000))
+                                  (:cooldown action))]
+              (assoc action
+                     :cost (action-cost last-revenue)
+                     :available-at-tick available-at
+                     :available? (<= available-at tick))))
+          (game-data/actions))))
+
+(defn purchase-action!
+  "Records and queues an action purchase. Returns either {:ok true ...} or
+   {:error keyword}. Money, history, and the scheduled action change together."
+  [datasource actor-game-player-id action-id target-game-player-id]
+  (jdbc/with-transaction [tx datasource]
+    (enable-foreign-keys! tx)
+    (let [action (game-data/action action-id)
+          actor (jdbc/execute-one! tx
+                                   ["SELECT game_players.id, game_players.game_id,
+                                            game_players.money, games.tick
+                                     FROM game_players JOIN games ON games.id = game_players.game_id
+                                     WHERE game_players.id = ?"
+                                    actor-game-player-id]
+                                   query-options)
+          target (when actor
+                   (jdbc/execute-one! tx
+                                      ["SELECT id FROM game_players WHERE id = ? AND game_id = ?"
+                                       target-game-player-id (:game-id actor)]
+                                      query-options))]
+      (cond
+        (nil? actor) {:error :actor-not-found}
+        (nil? action) {:error :unknown-action}
+        (nil? target) {:error :invalid-target}
+        (and (= :self (:target action))
+             (not= actor-game-player-id target-game-player-id)) {:error :invalid-target}
+        (and (= :player (:target action))
+             (= actor-game-player-id target-game-player-id)) {:error :invalid-target}
+        :else
+        (let [tick (:tick actor)
+              latest-use (jdbc/execute-one! tx
+                                            ["SELECT max(purchase_tick) AS purchase_tick
+                                              FROM game_action_uses
+                                              WHERE actor_game_player_id = ? AND action_id = ?"
+                                             actor-game-player-id (name action-id)]
+                                            query-options)
+              available-at (+ (long (or (:purchase-tick latest-use) -1000000))
+                              (:cooldown action))
+              cost (action-cost (last-player-revenue tx (:game-id actor) actor-game-player-id))]
+          (cond
+            (> available-at tick) {:error :cooldown :available-at-tick available-at}
+            (< (double (:money actor)) cost) {:error :insufficient-funds :cost cost}
+            :else
+            (let [apply-at-tick (inc tick)
+                  update-result (jdbc/execute-one! tx
+                                                   ["UPDATE game_players SET money = money - ?
+                                                     WHERE id = ? AND money >= ?"
+                                                    cost actor-game-player-id cost]
+                                                   query-options)]
+              (if (zero? (long (or (:next.jdbc/update-count update-result) 0)))
+                {:error :insufficient-funds :cost cost}
+                (let [action-use-id
+                      (:id (jdbc/execute-one! tx
+                                              ["INSERT INTO game_action_uses
+                                                (game_id, actor_game_player_id, target_game_player_id,
+                                                 action_id, cost, purchase_tick, apply_at_tick)
+                                                VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id"
+                                               (:game-id actor) actor-game-player-id target-game-player-id
+                                               (name action-id) cost tick apply-at-tick]
+                                              query-options))]
+                  (jdbc/execute-one! tx
+                                     ["INSERT INTO scheduled_actions
+                                       (game_player_id, kind, payload, apply_at_tick)
+                                       VALUES (?, ?, ?, ?)"
+                                      actor-game-player-id
+                                      (str "action-" (name action-id))
+                                      (encode {:action-id action-id
+                                               :target-game-player-id target-game-player-id
+                                               :action-use-id action-use-id})
+                                      apply-at-tick]
+                                     query-options)
+                  {:ok true :cost cost :apply-at-tick apply-at-tick})))))))))
+
 (defn load-actions
   [connectable game-id apply-at-tick]
   (mapv (fn [row]

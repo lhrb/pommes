@@ -5,6 +5,7 @@
    [dev.lhrb.pommes.pommes-connection.game-repository :as game-repository]
    [dev.lhrb.pommes.pommes-connection.game-tick :as game-tick]
    [dev.lhrb.pommes.pommes-connection.views.access :as access-view]
+   [dev.lhrb.pommes.pommes-connection.views.actions :as actions-view]
    [dev.lhrb.pommes.pommes-connection.views.dashboard :as dashboard]
    [dev.lhrb.pommes.pommes-connection.views.dishes :as dishes-view]
    [dev.lhrb.pommes.pommes-connection.views.game :as game-view]
@@ -153,6 +154,49 @@
             h/html str response/response (response/content-type "text/html; charset=utf-8"))))
     (response/status (response/response "Log in to access this game.") 401)))
 
+(defn- action-id [value]
+  (some-> value str keyword))
+
+(defn- player-id [value]
+  (try
+    (Long/parseLong (str value))
+    (catch Exception _ nil)))
+
+(defn- action-notice [params]
+  (case (:action-result params)
+    "scheduled" ["good" (str "Aktion ist für Tick " (:scheduled-for params) " notiert.")]
+    "cooldown" ["warning" (str "Diese Aktion ist erst ab Tick " (:available-at params) " wieder bereit.")]
+    "funds" ["error" "Dafür reicht deine Buden-Kasse nicht."]
+    "invalid" ["error" "Diese Aktion oder dieses Ziel ist nicht gültig."]
+    nil))
+
+(defn- actions-page [datasource request]
+  (if-let [data (authorized-data datasource request)]
+    (let [statuses (game-repository/action-statuses datasource (get-in data [:game :id])
+                                                   (get-in data [:viewer :id])
+                                                   (get-in data [:game :tick]))]
+      (actions-view/page (assoc data
+                                :actions statuses
+                                :notice (action-notice (:params request))
+                                :anti-forgery-token (:anti-forgery-token request))))
+    (response/status (response/response "Log in to access this game.") 401)))
+
+(defn- purchase-action [datasource request]
+  (let [game-token (get-in request [:path-params :game-token])]
+    (if-let [data (authorized-data datasource request)]
+      (let [result (game-repository/purchase-action!
+                    datasource (get-in data [:viewer :id])
+                    (action-id (get-in request [:params :action-id]))
+                    (player-id (get-in request [:params :target-player-id])))
+            location (str "/games/" (game-repository/normalize-token game-token) "/actions?")]
+        (response/redirect
+         (case (:error result)
+           nil (str location "action-result=scheduled&scheduled-for=" (:apply-at-tick result))
+           :cooldown (str location "action-result=cooldown&available-at=" (:available-at-tick result))
+           :insufficient-funds (str location "action-result=funds")
+           (str location "action-result=invalid"))))
+      (response/status (response/response "Log in to access this game.") 401))))
+
 (defn- create-game-page [request]
   (access-view/create-page {:anti-forgery-token (:anti-forgery-token request)}))
 
@@ -237,7 +281,10 @@
     ["/games/:game-token/dishes/setup"
      {:post (fn [request] (schedule-setup datasource request))}]
     ["/games/:game-token/dishes/preview"
-     {:post (fn [request] (preview-dishes datasource request))}]]))
+     {:post (fn [request] (preview-dishes datasource request))}]
+    ["/games/:game-token/actions"
+     {:get (fn [request] (actions-page datasource request))
+      :post (fn [request] (purchase-action datasource request))}]]))
 
 (comment
   ;; Add feature routes here as the corresponding feature is implemented.

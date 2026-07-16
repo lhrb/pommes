@@ -1,5 +1,6 @@
 (ns dev.lhrb.pommes.pommes-connection.game-tick
   (:require
+   [clojure.string :as str]
    [dev.lhrb.pommes.pommes-connection.game-repository :as game-repository]
    [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
    [dev.lhrb.pommes.pommes-connection.simulation :as simulation]
@@ -21,8 +22,8 @@
 
 (defn- apply-action
   [state {:keys [game-player-id kind payload]}]
-  (case kind
-    :setup
+  (cond
+    (= kind :setup)
     (update state :players
             (fn [players]
               (mapv (fn [player]
@@ -32,6 +33,25 @@
                             (assoc :dishes (setup-dishes (:dishes payload))))
                         player))
                     players)))
+
+    (str/starts-with? (name kind) "action-")
+    (let [action (game-data/action (:action-id payload))]
+      (when-not action
+        (throw (ex-info "Unknown game action" {:action-id (:action-id payload)})))
+      (update state :players
+              (fn [players]
+                (mapv (fn [player]
+                        (if (= (:target-game-player-id payload) (:id player))
+                          (update player :effects into
+                                  (mapv #(assoc %
+                                                :ticks-left (:duration action)
+                                                :action-id (:id action)
+                                                :action-use-id (:action-use-id payload))
+                                        (:effects action)))
+                          player))
+                      players))))
+
+    :else
     (throw (ex-info "Unknown scheduled action" {:kind kind}))))
 
 (defn- tick-summary

@@ -41,6 +41,36 @@
                :topping :ketchup
                :price 4.0}]}}
 
+   :actions
+   {:send-punks
+    {:id :send-punks
+     :name "Send Punks"
+     :target :player
+     :duration 12
+     :cooldown 18
+     :effects [{:type :demographic-attraction :demographic :students :modifier 0.30}
+               {:type :demographic-repulsion :demographic :families :modifier 0.20}
+               {:type :demographic-repulsion :demographic :retirees :modifier 0.20}]}
+    :rocker-meeting
+    {:id :rocker-meeting
+     :name "Rocker Meeting"
+     :target :self
+     :duration 18
+     :cooldown 18
+     :effects [{:type :demographic-attraction :demographic :office-workers :modifier -0.10}
+               {:type :demographic-attraction :demographic :students :modifier 0.20}
+               {:type :average-order-size :modifier 0.20}]}
+    :influencer-visit
+    {:id :influencer-visit
+     :name "Influencer Visit"
+     :target :self
+     :duration 9
+     :cooldown 18
+     :effects [{:type :demographic-attraction :demographic :yuppies :modifier 0.35}
+               {:type :demographic-attraction :demographic :foodies :modifier 0.25}
+               {:type :price-tolerance :modifier 0.15}]}
+    :cost {:revenue-ratio 0.25 :minimum 20.0}}
+
    :market
    {:price-anchors {:students 4.50
                     :families 5.50
@@ -159,6 +189,12 @@
 
 (defn starter-setup []
   (get-in game-data [:setup :starter]))
+
+(defn actions []
+  (dissoc (:actions game-data) :cost))
+
+(defn action [action-id]
+  (get (actions) action-id))
 
 (comment
   ;; Add a topping, interior, or demographic by editing game-data.

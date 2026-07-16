@@ -202,6 +202,9 @@
               dishes-response (handler {:request-method :get
                                         :uri (str "/games/" game-token "/dishes")
                                         :session {:game-token game-token :game-player-id game-player-id}})
+              actions-response (handler {:request-method :get
+                                         :uri (str "/games/" game-token "/actions")
+                                         :session {:game-token game-token :game-player-id game-player-id}})
               invalid-setup-response
               (handler {:request-method :post
                         :uri (str "/games/" game-token "/dishes/setup")
@@ -247,12 +250,15 @@
           (is (= "Cozy special" (get-in overview [:viewer :dishes 0 :name])))
           (is (= 200 (:status page-response)))
           (is (re-find #"Gerichte &amp; Markt" (:body page-response)))
+          (is (re-find #"Aktionen öffnen" (:body page-response)))
           (is (re-find #"data-next-tick-at" (:body page-response)))
           (is (re-find #"data-server-now" (:body page-response)))
           (is (re-find #"automatic-refresh" (:body page-response)))
           (is (re-find #"performance.now" (:body page-response)))
           (is (not (re-find #"Date\\.now" (:body page-response))))
           (is (= 200 (:status dishes-response)))
+          (is (= 200 (:status actions-response)))
+          (is (re-find #"Send Punks" (:body actions-response)))
           (is (re-find #"Marktprognose" (:body dishes-response)))
           (is (re-find #"Riesenportion \(€1,00\)" (:body dishes-response)))
           (is (re-find #"Wareneinsatz" (:body dishes-response)))
@@ -261,6 +267,50 @@
           (is (= 302 (:status setup-response)))
           (is (= (str "/games/" game-token "/dishes?scheduled-for=2")
                  (get-in setup-response [:headers "Location"])))))
+      (finally
+        (Files/deleteIfExists database-file)))))
+
+(deftest action-purchases-are-priced-recorded-and-applied
+  (let [database-file (Files/createTempFile "pommes-connection-actions-" ".db"
+                                             (make-array java.nio.file.attribute.FileAttribute 0))
+        datasource (jdbc/get-datasource (str "jdbc:sqlite:" database-file))]
+    (try
+      (migratus/migrate {:store :database :db {:datasource datasource}
+                         :migration-dir "resources/migrations"})
+      (game-repository/enable-foreign-keys! datasource)
+      (jdbc/execute-one! datasource ["INSERT INTO players (name) VALUES ('Ada'), ('Bea')"] query-options)
+      (let [game-id (game-repository/create-game! datasource "Action game")
+            player-ids (mapv :id (jdbc/execute! datasource ["SELECT id FROM players ORDER BY id"] query-options))
+            ada (game-repository/add-game-player! datasource
+                                                   (assoc (game-data/starter-setup)
+                                                          :game-id game-id :player-id (first player-ids)
+                                                          :player-name "Ada"))
+            bea (game-repository/add-game-player! datasource
+                                                   (assoc (game-data/starter-setup)
+                                                          :game-id game-id :player-id (second player-ids)
+                                                          :player-name "Bea"))
+            purchase (game-repository/purchase-action! datasource ada :send-punks bea)
+            repeat-purchase (game-repository/purchase-action! datasource ada :send-punks bea)]
+        (is (= {:ok true :cost 20.0 :apply-at-tick 1} purchase))
+        (is (= :cooldown (:error repeat-purchase)))
+        (is (= 0.0 (:money (jdbc/execute-one! datasource
+                                                ["SELECT money FROM game_players WHERE id = ?" ada]
+                                                query-options))))
+        (is (= {:actor-game-player-id ada :target-game-player-id bea
+                :action-id "send-punks" :cost 20.0 :purchase-tick 0 :apply-at-tick 1}
+               (select-keys (jdbc/execute-one! datasource
+                                                ["SELECT actor_game_player_id, target_game_player_id, action_id,
+                                                         cost, purchase_tick, apply_at_tick
+                                                  FROM game_action_uses"] query-options)
+                            [:actor-game-player-id :target-game-player-id :action-id :cost
+                             :purchase-tick :apply-at-tick])))
+        (game-tick/run-next-tick! datasource game-id simulation-config)
+        (let [target (jdbc/execute-one! datasource
+                                        ["SELECT active_effects FROM game_players WHERE id = ?" bea]
+                                        query-options)]
+          (is (= 3 (count (edn/read-string (:active-effects target)))))
+          (is (= :demographic-attraction
+                 (:type (first (edn/read-string (:active-effects target))))))))
       (finally
         (Files/deleteIfExists database-file)))))
 
