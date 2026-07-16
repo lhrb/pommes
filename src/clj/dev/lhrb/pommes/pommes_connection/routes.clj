@@ -1,13 +1,16 @@
 (ns dev.lhrb.pommes.pommes-connection.routes
   (:require
    [clojure.string :as str]
+   [dev.lhrb.pommes.pommes-connection.dish-market :as dish-market]
    [dev.lhrb.pommes.pommes-connection.game-repository :as game-repository]
    [dev.lhrb.pommes.pommes-connection.game-tick :as game-tick]
    [dev.lhrb.pommes.pommes-connection.views.access :as access-view]
    [dev.lhrb.pommes.pommes-connection.views.dashboard :as dashboard]
+   [dev.lhrb.pommes.pommes-connection.views.dishes :as dishes-view]
    [dev.lhrb.pommes.pommes-connection.views.game :as game-view]
    [integrant.core :as ig]
    [reitit.ring :as ring]
+   [hiccup2.core :as h]
    [ring.util.response :as response]))
 
 (defn- choice [value options]
@@ -22,7 +25,7 @@
 
 (defn- dish-form [params index]
   (let [prefix (str "dish-" index "-")
-        options (game-view/setup-options)]
+        options (dishes-view/setup-options)]
     {:name (get params (keyword (str prefix "name")))
      :pommes {:size (choice (get params (keyword (str prefix "size"))) (:sizes options))
               :seasoning (choice (get params (keyword (str prefix "seasoning"))) (:seasonings options))}
@@ -30,7 +33,7 @@
      :price (get params (keyword (str prefix "price")))}))
 
 (defn- setup-from-params [params]
-  (let [options (game-view/setup-options)
+  (let [options (dishes-view/setup-options)
         dishes (mapv #(dish-form params %) (range 1 (inc (:dish-count options))))
         interior (choice (:interior params) (:interiors options))
         dish-errors
@@ -95,12 +98,34 @@
                              :server-now (System/currentTimeMillis)))
       (response/status (response/response "Log in to access this game.") 401))))
 
+(defn- authorized-data [datasource request]
+  (let [game-token (get-in request [:path-params :game-token])
+        game-player-id (get-in request [:session :game-player-id])]
+    (when (and (= (game-repository/normalize-token game-token)
+                  (get-in request [:session :game-token]))
+               game-player-id)
+      (overview datasource game-token game-player-id))))
+
+(defn- forecast-for [datasource data setup]
+  (dish-market/forecast
+   (game-repository/load-game-state datasource (get-in data [:game :id])
+                                   game-tick/default-simulation-config)
+   (get-in data [:viewer :id])
+   setup))
+
+(defn- dishes-page [datasource request]
+  (if-let [data (authorized-data datasource request)]
+    (let [setup (select-keys (:viewer data) [:interior :dishes])]
+      (dishes-view/page (assoc data
+                               :forecast (forecast-for datasource data setup)
+                               :scheduled-for (get-in request [:params :scheduled-for])
+                               :anti-forgery-token (:anti-forgery-token request))))
+    (response/status (response/response "Log in to access this game.") 401)))
+
 (defn- schedule-setup [datasource request]
   (let [game-token (get-in request [:path-params :game-token])
         game-player-id (get-in request [:session :game-player-id])
-        data (and (= (game-repository/normalize-token game-token)
-                     (get-in request [:session :game-token]))
-                  game-player-id (overview datasource game-token game-player-id))]
+        data (authorized-data datasource request)]
     (cond
       (nil? data)
       (response/not-found "Game player not found")
@@ -108,15 +133,25 @@
       :else
       (let [{:keys [form errors setup]} (setup-from-params (:params request))]
         (if (seq errors)
-          (response/status (game-view/page (assoc data
-                                                   :form form
-                                                   :errors errors
-                                                   :server-now (System/currentTimeMillis)))
+          (response/status (dishes-view/page (assoc data
+                                                   :form form :errors errors
+                                                   :forecast (forecast-for datasource data
+                                                                            (select-keys (:viewer data) [:interior :dishes]))
+                                                   :anti-forgery-token (:anti-forgery-token request)))
                            400)
           (let [apply-at-tick (game-repository/schedule-setup! datasource game-player-id setup)]
             (response/redirect
              (str "/games/" (game-repository/normalize-token game-token)
-                  "?scheduled-for=" apply-at-tick))))))))
+                  "/dishes?scheduled-for=" apply-at-tick))))))))
+
+(defn- preview-dishes [datasource request]
+  (if-let [data (authorized-data datasource request)]
+    (let [{:keys [errors setup]} (setup-from-params (:params request))]
+      (if (seq errors)
+        (response/status (response/response "<p class=\"errors\">Bitte fülle alle Menüfelder gültig aus.</p>") 422)
+        (-> (dishes-view/forecast-panel (forecast-for datasource data setup))
+            h/html str response/response (response/content-type "text/html; charset=utf-8"))))
+    (response/status (response/response "Log in to access this game.") 401)))
 
 (defn- create-game-page [request]
   (access-view/create-page {:anti-forgery-token (:anti-forgery-token request)}))
@@ -197,8 +232,12 @@
       :post (fn [request] (login datasource request))}]
     ["/games/:game-token"
      {:get (fn [request] (player-page datasource request))}]
-    ["/games/:game-token/setup"
-     {:post (fn [request] (schedule-setup datasource request))}]]))
+    ["/games/:game-token/dishes"
+     {:get (fn [request] (dishes-page datasource request))}]
+    ["/games/:game-token/dishes/setup"
+     {:post (fn [request] (schedule-setup datasource request))}]
+    ["/games/:game-token/dishes/preview"
+     {:post (fn [request] (preview-dishes datasource request))}]]))
 
 (comment
   ;; Add feature routes here as the corresponding feature is implemented.

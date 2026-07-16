@@ -840,6 +840,12 @@
    :dish-sales {}
    :demographic-sales {}})
 
+(defn- add-demographic-sales
+  [game-stats demographic-sales]
+  (update game-stats :demographic-sales
+          (fn [totals]
+            (merge-with + (or totals {}) demographic-sales))))
+
 (defn initial-stats
   [players]
   (into {}
@@ -907,6 +913,10 @@
       (assoc
         :last-tick
         stats)
+
+      ;; Keep durable totals separate from the latest-tick receipt. The stats
+      ;; page can use this without replaying every historical game tick.
+      (update :game-stats add-demographic-sales (:demographic-sales stats))
 
       (update
         :effects

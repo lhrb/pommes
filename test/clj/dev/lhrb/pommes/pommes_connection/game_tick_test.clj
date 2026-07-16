@@ -186,6 +186,9 @@
               history (jdbc/execute-one! datasource
                                           ["SELECT tick, summary FROM game_ticks WHERE game_id = ?" game-id]
                                           query-options)
+              game-stats (jdbc/execute-one! datasource
+                                            ["SELECT game_stats FROM game_players WHERE id = ?" game-player-id]
+                                            query-options)
               overview (game-repository/load-player-game-overview
                         datasource game-id game-player-id simulation-config)
               game-token (:game-token (jdbc/execute-one! datasource
@@ -196,14 +199,17 @@
               page-response (handler {:request-method :get
                                       :uri (str "/games/" game-token)
                                       :session {:game-token game-token :game-player-id game-player-id}})
+              dishes-response (handler {:request-method :get
+                                        :uri (str "/games/" game-token "/dishes")
+                                        :session {:game-token game-token :game-player-id game-player-id}})
               invalid-setup-response
               (handler {:request-method :post
-                        :uri (str "/games/" game-token "/setup")
+                        :uri (str "/games/" game-token "/dishes/setup")
                         :session {:game-token game-token :game-player-id game-player-id}
                         :params {:interior "invalid"}})
               setup-response
               (handler {:request-method :post
-                        :uri (str "/games/" game-token "/setup")
+                        :uri (str "/games/" game-token "/dishes/setup")
                         :session {:game-token game-token :game-player-id game-player-id}
                         :params {:interior "modern"
                                  :dish-1-name "Budget"
@@ -235,22 +241,25 @@
           (is (= {:locals (get-in (edn/read-string (:summary history))
                                   [:players 0 :demographic-sales :locals])}
                  (get-in overview [:latest-tick :players 0 :demographic-sales])))
+          (is (= (get-in overview [:latest-tick :players 0 :demographic-sales])
+                 (get-in (edn/read-string (:game-stats game-stats)) [:demographic-sales])))
           (is (= "Ada" (get-in overview [:players 0 :name])))
           (is (= "Cozy special" (get-in overview [:viewer :dishes 0 :name])))
           (is (= 200 (:status page-response)))
-          (is (re-find #"Current demographics" (:body page-response)))
+          (is (re-find #"Gerichte &amp; Markt" (:body page-response)))
           (is (re-find #"data-next-tick-at" (:body page-response)))
           (is (re-find #"data-server-now" (:body page-response)))
           (is (re-find #"automatic-refresh" (:body page-response)))
           (is (re-find #"performance.now" (:body page-response)))
           (is (not (re-find #"Date\\.now" (:body page-response))))
-          (is (re-find #"Sales by demographic" (:body page-response)))
-          (is (re-find #"Extra large \(€1\.00\)" (:body page-response)))
-          (is (re-find #"Ingredient cost" (:body page-response)))
+          (is (= 200 (:status dishes-response)))
+          (is (re-find #"Marktprognose" (:body dishes-response)))
+          (is (re-find #"Riesenportion \(€1,00\)" (:body dishes-response)))
+          (is (re-find #"Wareneinsatz" (:body dishes-response)))
           (is (= 400 (:status invalid-setup-response)))
           (is (re-find #"Name is required" (:body invalid-setup-response)))
           (is (= 302 (:status setup-response)))
-          (is (= (str "/games/" game-token "?scheduled-for=2")
+          (is (= (str "/games/" game-token "/dishes?scheduled-for=2")
                  (get-in setup-response [:headers "Location"])))))
       (finally
         (Files/deleteIfExists database-file)))))
@@ -294,7 +303,7 @@
         (is (= 302 (:status create-response)))
         (is (= (str "/games/" game-token) (get-in create-response [:headers "Location"])))
         (is (= 200 (:status page-response)))
-        (is (re-find #"Invite link" (:body page-response)))
+        (is (re-find #"Gerichte &amp; Markt" (:body page-response)))
         (is (= 302 (:status join-response)))
         (is (= 400 (:status duplicate-response)))
         (is (= 302 (:status login-response)))
@@ -344,9 +353,10 @@
                                 "player-name" "Ada"
                                 "player-password" "secret"})
             game-page (p/follow-redirect create-response)
-            setup-token (anti-forgery-token (get-in game-page [:response :body]))
+            dishes-page (p/request game-page (str "/games/" game-token "/dishes") :request-method :get)
+            setup-token (anti-forgery-token (get-in dishes-page [:response :body]))
             setup-response
-            (p/request game-page (str (get-in game-page [:request :uri]) "/setup")
+            (p/request dishes-page (str "/games/" game-token "/dishes/setup")
                        :request-method :post
                        :params {"__anti-forgery-token" setup-token
                                 "interior" "modern"
@@ -372,9 +382,10 @@
         (is (seq login-token))
         (is (= 302 (get-in login-response [:response :status])))
         (is (= 200 (get-in game-page [:response :status])))
+        (is (= 200 (get-in dishes-page [:response :status])))
         (is (seq setup-token))
         (is (= 302 (get-in setup-response [:response :status])))
-        (is (re-find #"\\?scheduled-for=1$"
+        (is (re-find #"/dishes[?]scheduled-for=1$"
                      (get-in setup-response [:response :headers "Location"]))))
       (finally
         (Files/deleteIfExists database-file)))))

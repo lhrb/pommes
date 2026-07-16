@@ -159,9 +159,11 @@
                             (layout/stat-row "Gewinn" (money (:profit viewer-result)))
                             (layout/stat-row "Kasse" (money (:money viewer-result)))]
                            [:p "Noch keine Einnahmen. Bau ein Menü, bevor der erste Mob auftaucht."])])
-          (layout/panel "panel--tight"
-                        [[:h2 "Die Kundschaft · die Straße munkelt"]
-                         [:div.grid.grid--three (map demand-card (:demographics city))]])
+          (layout/panel "panel--yellow"
+                        [[:h2 "Gerichte & Markt"]
+                         [:p "Stell deine Karte zusammen und sieh sofort, welche Kundschaft du damit erreichen kannst."]
+                         [:a.button {:href (str "/games/" (:game-token game) "/dishes")}
+                          "Gerichte & Markt öffnen"]])
           (layout/panel "panel--tight"
                         [[:h2 "Rivalenradar"]
                          [:p.meta "Gerücht: Irgendwer um die Ecke denkt schon wieder über Rabatt nach."]
@@ -172,37 +174,12 @@
                            [:div.grid.grid--two
                             (layout/stat-row "Umsatz" (money (:revenue viewer-result)))
                             (layout/stat-row "Prestige" (quantity (:prestige viewer-result)))]
-                           [:h3 "Verkäufe nach Kundschaft"]
-                           [:table
-                            [:thead [:tr [:th "Straßenvolk"] [:th.numeric "Bestellungen"]]]
-                            [:tbody
-                             (for [{:keys [id]} (:demographics city)]
-                               [:tr [:td (label id)]
-                                [:td.numeric (quantity (get (:demographic-sales viewer-result) id))]])]]]))
-          (layout/panel "panel--yellow"
-                        [[:div.offer-card__top
-                          [:h2 "Morgenkarte drucken"]
-                          (layout/badge "Nächster Tick")]
-                         [:p "Änderungen warten auf den nächsten Ansturm. Kurz halten, die Pommes reden lassen."]
-                         (when (seq errors)
-                           [:p.errors "Bitte korrigiere die markierten Menüdetails."])
-                         [:form {:id "menu-form" :method "post" :action (str "/games/" (:game-token game) "/setup")}
-                          (when anti-forgery-token
-                            [:input {:type "hidden" :name "__anti-forgery-token" :value anti-forgery-token}])
-                          [:fieldset
-                           [:legend "Innenleben"]
-                           [:label {:for "interior"} "Budenstimmung"
-                            (select-input "interior" (or (:interior form) (:interior viewer)) (:interiors options) nil)]
-                           (when-let [interior-errors (seq (:interior errors))]
-                             [:ul.errors (for [error interior-errors] [:li error])])]
-                          (map-indexed (fn [index dish] (dish-field options (inc index) dish errors)) dishes)
-                          (layout/button "Für den nächsten Tick eintragen")]])
+                           ]))
           (layout/panel "panel--quiet"
                         [[:h2 "Pinnwand"]
                          [:p.invite "Einladungslink · weitere Fritteuse gesucht: "
                           [:a {:href (str "/join/" (:invite-token game))}
                            (str "/join/" (:invite-token game))]]])
-          [:script (hiccup/raw-string cost-script)]
           [:script (hiccup/raw-string refresh-script)]])
         response/response
         (response/content-type "text/html; charset=utf-8"))))

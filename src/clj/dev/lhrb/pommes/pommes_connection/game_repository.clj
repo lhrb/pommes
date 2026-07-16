@@ -201,7 +201,7 @@
     (when-not game
       (throw (ex-info "Game does not exist" {:game-id game-id})))
     (let [players (jdbc/execute! connectable
-                                 ["SELECT id, money, prestige, interior, active_effects
+                                 ["SELECT id, money, prestige, interior, active_effects, game_stats
                                    FROM game_players WHERE game_id = ? ORDER BY id"
                                   game-id]
                                  query-options)]
@@ -220,6 +220,7 @@
                        :prestige (:prestige player)
                        :interior (keyword (:interior player))
                        :effects (decode (:active-effects player))
+                       :game-stats (decode (:game-stats player))
                        :dishes (load-dishes connectable (:id player))})
                     players)}))))
 
@@ -370,10 +371,10 @@
   (doseq [player (:players state)]
     (jdbc/execute-one! connectable
                        ["UPDATE game_players
-                         SET money = ?, prestige = ?, interior = ?, active_effects = ?
+                         SET money = ?, prestige = ?, interior = ?, active_effects = ?, game_stats = ?
                          WHERE id = ?"
                         (:money player) (:prestige player) (name (:interior player))
-                        (encode (:effects player)) (:id player)]
+                        (encode (:effects player)) (encode (:game-stats player)) (:id player)]
                        query-options))
   (jdbc/execute-one! connectable
                      ["DELETE FROM player_dishes
