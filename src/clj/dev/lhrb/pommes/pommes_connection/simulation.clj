@@ -522,6 +522,7 @@
                (case (:type effect)
                  :demographic-attraction (double (:modifier effect 0.0))
                  :demographic-repulsion (- (double (:modifier effect 0.0)))
+                 :global-attraction (double (:modifier effect 0.0))
                  (double (:utility effect 0.0)))))))
 
 (defn tick-effects

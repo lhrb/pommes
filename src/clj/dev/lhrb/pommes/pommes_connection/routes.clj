@@ -174,7 +174,8 @@
   (if-let [data (authorized-data datasource request)]
     (let [statuses (game-repository/action-statuses datasource (get-in data [:game :id])
                                                    (get-in data [:viewer :id])
-                                                   (get-in data [:game :tick]))]
+                                                   (get-in data [:game :tick])
+                                                   (get-in data [:viewer :money]))]
       (actions-view/page (assoc data
                                 :actions statuses
                                 :notice (action-notice (:params request))

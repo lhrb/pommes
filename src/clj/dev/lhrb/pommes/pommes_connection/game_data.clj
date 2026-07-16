@@ -45,31 +45,36 @@
    {:send-punks
     {:id :send-punks
      :name "Send Punks"
-     :target :player
+     :target :other-player
      :duration 12
      :cooldown 18
-     :effects [{:type :demographic-attraction :demographic :students :modifier 0.30}
+     :cost {:income-multiplier 2.0 :cash-ratio 0.0025}
+     :effects [{:type :demographic-attraction :demographic :students :modifier 0.10}
                {:type :demographic-repulsion :demographic :families :modifier 0.20}
-               {:type :demographic-repulsion :demographic :retirees :modifier 0.20}]}
+               {:type :demographic-repulsion :demographic :retirees :modifier 0.20}
+               {:type :global-attraction :modifier -0.15}]}
     :rocker-meeting
     {:id :rocker-meeting
      :name "Rocker Meeting"
-     :target :self
+     :target :other-player
      :duration 18
      :cooldown 18
+     :cost {:income-multiplier 1.0 :cash-ratio 0.0015}
      :effects [{:type :demographic-attraction :demographic :office-workers :modifier -0.10}
-               {:type :demographic-attraction :demographic :students :modifier 0.20}
-               {:type :average-order-size :modifier 0.20}]}
+               {:type :demographic-attraction :demographic :students :modifier 0.10}
+               {:type :average-order-size :modifier 0.20}
+               {:type :global-attraction :modifier -0.15}]}
     :influencer-visit
     {:id :influencer-visit
      :name "Influencer Visit"
-     :target :self
+     :target :any-player
      :duration 9
      :cooldown 18
+     :cost {:income-multiplier 0.75 :cash-ratio 0.001}
      :effects [{:type :demographic-attraction :demographic :yuppies :modifier 0.35}
                {:type :demographic-attraction :demographic :foodies :modifier 0.25}
                {:type :price-tolerance :modifier 0.15}]}
-    :cost {:revenue-ratio 0.25 :minimum 20.0}}
+    :cost {:minimum 20.0}}
 
    :market
    {:price-anchors {:students 4.50

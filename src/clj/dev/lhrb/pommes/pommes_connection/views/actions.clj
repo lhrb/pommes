@@ -16,14 +16,16 @@
   (case type
     :demographic-attraction (str (if (neg? modifier) "Weniger " "Mehr ") (label demographic))
     :demographic-repulsion (str "Weniger " (label demographic))
+    :global-attraction "15% weniger Anziehung für alle"
     :average-order-size "20% größere Bestellungen"
     :price-tolerance "15% mehr Preistoleranz"
     (name type)))
 
 (defn- target-options [action viewer players]
-  (if (= :self (:target action))
-    [viewer]
-    (remove #(= (:id %) (:id viewer)) players)))
+  (case (:target action)
+    :other-player (remove #(= (:id %) (:id viewer)) players)
+    :any-player players
+    []))
 
 (defn- action-card [game viewer players anti-forgery-token action]
   (let [targets (target-options action viewer players)]

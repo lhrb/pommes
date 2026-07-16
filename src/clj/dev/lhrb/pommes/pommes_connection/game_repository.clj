@@ -323,13 +323,17 @@
         apply-at-tick))))
 
 (defn action-cost
-  [last-revenue]
-  (let [{:keys [revenue-ratio minimum]}
-        (get-in game-data/game-data [:actions :cost])]
+  [action last-revenue money]
+  (let [{:keys [minimum]}
+        (get-in game-data/game-data [:actions :cost])
+        {:keys [income-multiplier cash-ratio]}
+        (:cost action)]
     (/ (Math/round (* 100.0
                       (max (double minimum)
-                           (* (double revenue-ratio)
-                              (double (or last-revenue 0.0))))))
+                           (* (double income-multiplier)
+                              (double (or last-revenue 0.0)))
+                           (* (double cash-ratio)
+                              (double (or money 0.0))))))
        100.0)))
 
 (defn- last-player-revenue
@@ -345,7 +349,7 @@
           (:players (decode (:summary tick))))))
 
 (defn action-statuses
-  [connectable game-id game-player-id tick]
+  [connectable game-id game-player-id tick money]
   (let [last-revenue (or (last-player-revenue connectable game-id game-player-id) 0.0)
         latest-use (into {}
                          (map (juxt #(keyword (:action-id %)) :purchase-tick))
@@ -360,7 +364,7 @@
             (let [available-at (+ (long (get latest-use action-id -1000000))
                                   (:cooldown action))]
               (assoc action
-                     :cost (action-cost last-revenue)
+                     :cost (action-cost action last-revenue money)
                      :available-at-tick available-at
                      :available? (<= available-at tick))))
           (game-data/actions))))
@@ -388,9 +392,7 @@
         (nil? actor) {:error :actor-not-found}
         (nil? action) {:error :unknown-action}
         (nil? target) {:error :invalid-target}
-        (and (= :self (:target action))
-             (not= actor-game-player-id target-game-player-id)) {:error :invalid-target}
-        (and (= :player (:target action))
+        (and (= :other-player (:target action))
              (= actor-game-player-id target-game-player-id)) {:error :invalid-target}
         :else
         (let [tick (:tick actor)
@@ -402,7 +404,9 @@
                                             query-options)
               available-at (+ (long (or (:purchase-tick latest-use) -1000000))
                               (:cooldown action))
-              cost (action-cost (last-player-revenue tx (:game-id actor) actor-game-player-id))]
+              cost (action-cost action
+                                (last-player-revenue tx (:game-id actor) actor-game-player-id)
+                                (:money actor))]
           (cond
             (> available-at tick) {:error :cooldown :available-at-tick available-at}
             (< (double (:money actor)) cost) {:error :insufficient-funds :cost cost}

@@ -41,6 +41,22 @@
                           :price {:model :cheap :max 8.0}
                           :interior {:classic 1.0 :cozy 1.0}}}]}}))
 
+(deftest global-attraction-affects-every-demographic
+  (let [player {:market-modifiers {}
+                :effects [{:type :global-attraction :modifier -0.15}
+                          {:type :demographic-attraction :demographic :students :modifier 0.10}]}
+        student {:id :students}
+        family {:id :families}]
+    (is (< (Math/abs (+ 0.05 (simulation/temporary-effect-utility player student))) 1.0e-9))
+    (is (= -0.15 (simulation/temporary-effect-utility player family)))))
+
+(deftest action-costs-scale-with-income-and-cash
+  (is (= [300000.0 162000.0 112500.0]
+         (mapv #(game-repository/action-cost (game-data/action %) 150000.0 108000000.0)
+               [:send-punks :rocker-meeting :influencer-visit])))
+  (is (= 20.0
+         (game-repository/action-cost (game-data/action :send-punks) 0.0 0.0))))
+
 (deftest game-data-catalog-is-covered-by-demographic-preferences
   (let [catalog (:catalog game-data/game-data)
         demographics (get-in game-data/game-data [:city :demographics])
@@ -289,8 +305,16 @@
                                                    (assoc (game-data/starter-setup)
                                                           :game-id game-id :player-id (second player-ids)
                                                           :player-name "Bea"))
+            invalid-punks (game-repository/purchase-action! datasource ada :send-punks ada)
+            invalid-rocker (game-repository/purchase-action! datasource ada :rocker-meeting ada)
+            influencer-self (game-repository/purchase-action! datasource ada :influencer-visit ada)
+            _ (jdbc/execute-one! datasource ["UPDATE game_players SET money = 20 WHERE id = ?" ada]
+                                 query-options)
             purchase (game-repository/purchase-action! datasource ada :send-punks bea)
             repeat-purchase (game-repository/purchase-action! datasource ada :send-punks bea)]
+        (is (= :invalid-target (:error invalid-punks)))
+        (is (= :invalid-target (:error invalid-rocker)))
+        (is (= {:ok true :cost 20.0 :apply-at-tick 1} influencer-self))
         (is (= {:ok true :cost 20.0 :apply-at-tick 1} purchase))
         (is (= :cooldown (:error repeat-purchase)))
         (is (= 0.0 (:money (jdbc/execute-one! datasource
@@ -301,14 +325,14 @@
                (select-keys (jdbc/execute-one! datasource
                                                 ["SELECT actor_game_player_id, target_game_player_id, action_id,
                                                          cost, purchase_tick, apply_at_tick
-                                                  FROM game_action_uses"] query-options)
+                                                  FROM game_action_uses WHERE action_id = 'send-punks'"] query-options)
                             [:actor-game-player-id :target-game-player-id :action-id :cost
                              :purchase-tick :apply-at-tick])))
         (game-tick/run-next-tick! datasource game-id simulation-config)
         (let [target (jdbc/execute-one! datasource
                                         ["SELECT active_effects FROM game_players WHERE id = ?" bea]
                                         query-options)]
-          (is (= 3 (count (edn/read-string (:active-effects target)))))
+          (is (= 4 (count (edn/read-string (:active-effects target)))))
           (is (= :demographic-attraction
                  (:type (first (edn/read-string (:active-effects target))))))))
       (finally
