@@ -63,7 +63,14 @@
             :sales (:sales last-tick)
             :regular-sales (:regular-sales last-tick)
             :revenue (:revenue last-tick)
+            :gross-profit (:gross-profit last-tick)
             :profit (:profit last-tick)
+            :tax (:tax last-tick)
+            :tax-avoided (:tax-avoided last-tick)
+            :concealment-rate (:concealment-rate last-tick)
+            :suspicion (:suspicion last-tick)
+            :audited? (:audited? last-tick)
+            :audit-penalty-ticks (:audit-penalty-ticks last-tick)
             :demographic-sales (:demographic-sales last-tick)
             :money money
             :prestige prestige

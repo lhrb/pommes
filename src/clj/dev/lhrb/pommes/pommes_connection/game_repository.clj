@@ -207,6 +207,14 @@
         (jdbc/execute! connectable
                        ["SELECT research_id, level FROM player_research WHERE game_player_id = ?"
                         game-player-id]
+                        query-options)))
+
+(defn- load-black-market [connectable game-player-id]
+  (into {}
+        (map (juxt #(keyword (:item-id %)) :level))
+        (jdbc/execute! connectable
+                       ["SELECT item_id, level FROM player_black_market WHERE game_player_id = ?"
+                        game-player-id]
                        query-options)))
 
 (defn load-game-state
@@ -239,6 +247,7 @@
                        :game-stats (decode (:game-stats player))
                        :regulars (load-regulars connectable (:id player))
                        :research (load-research connectable (:id player))
+                       :black-market (load-black-market connectable (:id player))
                        :dishes (load-dishes connectable (:id player))})
                     players)}))))
 
@@ -251,7 +260,8 @@
         (jdbc/execute-one! connectable
                            ["SELECT game_players.id, game_players.money,
                                     game_players.prestige, game_players.interior,
-                                    game_players.active_effects, game_players.player_name
+                                    game_players.active_effects, game_players.game_stats,
+                                    game_players.player_name
                               FROM game_players
                               JOIN players ON players.id = game_players.player_id
                               WHERE game_players.game_id = ? AND game_players.id = ?"
@@ -284,8 +294,10 @@
                   :prestige (:prestige game-player)
                   :interior (keyword (:interior game-player))
                   :effects (decode (:active-effects game-player))
+                  :game-stats (decode (:game-stats game-player))
                   :regulars (load-regulars connectable (:id game-player))
                   :research (load-research connectable (:id game-player))
+                  :black-market (load-black-market connectable (:id game-player))
                   :dishes (load-dishes connectable (:id game-player))}
          :players (mapv #(assoc % :name (:player-name %)) players)
          :city (if-let [city-state (:city-state game)]
@@ -356,9 +368,12 @@
                               (double (or money 0.0))))))
        100.0)))
 
-(defn research-cost [level]
-  (let [{:keys [base multiplier]} (get-in game-data/game-data [:research :cost])]
+(defn progression-cost [cost level]
+  (let [{:keys [base multiplier]} cost]
     (/ (Math/round (* 100.0 (double base) (Math/pow (double multiplier) (long level)))) 100.0)))
+
+(defn research-cost [level]
+  (progression-cost (get-in game-data/game-data [:research :cost]) level))
 
 (defn research-statuses
   [connectable game-id game-player-id money]
@@ -421,6 +436,51 @@
                                    ON CONFLICT (game_player_id, research_id)
                                    DO UPDATE SET level = player_research.level + 1"
                                   game-player-id (name research-id)]
+                                 query-options)
+              {:ok true :cost cost :level (inc level)})))))))
+
+(defn black-market-statuses
+  [connectable game-player-id money]
+  (let [levels (load-black-market connectable game-player-id)
+        config (:black-market game-data/game-data)
+        maximum-level (get-in config [:cost :maximum-level])]
+    (mapv (fn [[item-id item]]
+            (let [level (long (get levels item-id 0))
+                  cost (progression-cost (:cost config) level)]
+              (assoc item :level level :cost cost :maximum-level maximum-level
+                     :available? (and (< level maximum-level) (>= (double money) cost)))))
+          (game-data/black-market-items))))
+
+(defn purchase-black-market!
+  [datasource game-player-id item-id]
+  (jdbc/with-transaction [tx datasource]
+    (enable-foreign-keys! tx)
+    (let [item (game-data/black-market-item item-id)
+          config (:black-market game-data/game-data)
+          maximum-level (get-in config [:cost :maximum-level])
+          player (jdbc/execute-one! tx ["SELECT id, money FROM game_players WHERE id = ?" game-player-id]
+                                    query-options)
+          level (long (get (load-black-market tx game-player-id) item-id 0))
+          cost (progression-cost (:cost config) level)]
+      (cond
+        (nil? player) {:error :player-not-found}
+        (nil? item) {:error :unknown-item}
+        (>= level maximum-level) {:error :maximum-level}
+        (< (double (:money player)) cost) {:error :insufficient-funds :cost cost}
+        :else
+        (let [updated (jdbc/execute-one! tx
+                                         ["UPDATE game_players SET money = money - ? WHERE id = ? AND money >= ?"
+                                          cost game-player-id cost]
+                                         query-options)]
+          (if (zero? (long (or (:next.jdbc/update-count updated) 0)))
+            {:error :insufficient-funds :cost cost}
+            (do
+              (jdbc/execute-one! tx
+                                 ["INSERT INTO player_black_market (game_player_id, item_id, level)
+                                   VALUES (?, ?, 1)
+                                   ON CONFLICT (game_player_id, item_id)
+                                   DO UPDATE SET level = player_black_market.level + 1"
+                                  game-player-id (name item-id)]
                                  query-options)
               {:ok true :cost cost :level (inc level)})))))))
 

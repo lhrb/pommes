@@ -3,6 +3,7 @@
    [clojure.edn :as edn]
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]
+   [dev.lhrb.pommes.pommes-connection.black-market :as black-market]
    [dev.lhrb.pommes.pommes-connection.demographics-simulation :as demographics-simulation]
    [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
    [dev.lhrb.pommes.pommes-connection.game-repository :as game-repository]
@@ -51,6 +52,23 @@
     (is (< (Math/abs (+ 0.05 (simulation/temporary-effect-utility player student))) 1.0e-9))
     (is (= -0.15 (simulation/temporary-effect-utility player family)))))
 
+(deftest black-market-taxes-revenue-and-audits-deterministically
+  (let [rules {:tax-rate 0.19 :suspicion-factor 0.02 :audit-every-ticks 10
+               :base-audit-chance 100.0 :audit-penalty-ticks 10
+               :items {:creative-bookkeeping {:maximum-concealment 0.10}}}
+        player {:id 7 :black-market {:creative-bookkeeping 25}
+                :game-stats {:suspicion 0.0}}
+        [after-first receipt] (black-market/settle-player rules 1 player {:revenue 100.0 :profit 60.0})
+        [_ audit-receipt] (black-market/settle-player rules 10 after-first {:revenue 100.0 :profit 60.0})]
+    (is (< 0.09 (:concealment-rate receipt) 0.10))
+    (is (< (:tax receipt) 19.0))
+    (is (= (- 60.0 (:tax receipt)) (:profit receipt)))
+    (is (pos? (get-in after-first [:game-stats :total-tax-avoided])))
+    (is (:audited? audit-receipt))
+    (is (= 9 (:audit-penalty-ticks audit-receipt)))
+    (is (= 38.0 (:tax audit-receipt)))
+    (is (= 0.0 (:suspicion audit-receipt)))))
+
 (deftest action-costs-scale-with-income-and-cash
   (is (= [300000.0 162000.0 112500.0 225000.0 189000.0 162000.0]
          (mapv #(game-repository/action-cost (game-data/action %) 150000.0 108000000.0)
@@ -72,6 +90,45 @@
     (is (= 20 (regulars/regular-cap 100 rules)))
     (is (< (get-in prepared [:ada :locals :returns]) 5))
     (is (< 5 (get-in finalized [:ada :locals]) 20))))
+
+(deftest black-market-upgrades-are-persisted-and-loaded
+  (let [database-file (Files/createTempFile "pommes-connection-black-market-" ".db"
+                                             (make-array java.nio.file.attribute.FileAttribute 0))
+        datasource (jdbc/get-datasource (str "jdbc:sqlite:" database-file))]
+    (try
+      (migratus/migrate {:store :database :db {:datasource datasource}
+                         :migration-dir "resources/migrations"})
+      (game-repository/enable-foreign-keys! datasource)
+      (jdbc/execute-one! datasource ["INSERT INTO players (name) VALUES ('Black market Ada')"] query-options)
+      (let [game-id (game-repository/create-game! datasource "Black market game")
+            player-id (:id (jdbc/execute-one! datasource ["SELECT id FROM players WHERE name = 'Black market Ada'"]
+                                                query-options))
+            game-player-id (game-repository/add-game-player!
+                            datasource (assoc (game-data/starter-setup)
+                                              :game-id game-id :player-id player-id
+                                              :player-name "Ada"))
+            purchase (game-repository/purchase-black-market!
+                      datasource game-player-id :creative-bookkeeping)
+            overview (game-repository/load-player-game-overview datasource game-id game-player-id
+                                                                (game-data/simulation-config))
+            game-token (:game-token (jdbc/execute-one! datasource
+                                                       ["SELECT game_token FROM games WHERE id = ?" game-id]
+                                                       query-options))
+            handler (ring/ring-handler (ig/init-key :app/routes {:datasource datasource}))
+            page-response (handler {:request-method :get
+                                    :uri (str "/games/" game-token "/black-market")
+                                    :session {:game-token game-token :game-player-id game-player-id}})]
+        (is (= {:ok true :cost 20.0 :level 1} purchase))
+        (is (= {:creative-bookkeeping 1} (get-in overview [:viewer :black-market])))
+        (is (= 0.0 (get-in overview [:viewer :money])))
+        (is (= 200 (:status page-response)))
+        (is (re-find #"Schwarzmarkt" (:body page-response)))
+        (is (re-find #"Kreative Buchführung" (:body page-response)))
+        (is (= :insufficient-funds
+               (:error (game-repository/purchase-black-market!
+                        datasource game-player-id :cash-only-register)))))
+      (finally
+        (Files/deleteIfExists database-file)))))
 
 (deftest game-data-catalog-is-covered-by-demographic-preferences
   (let [catalog (:catalog game-data/game-data)

@@ -6,6 +6,7 @@
    [dev.lhrb.pommes.pommes-connection.game-tick :as game-tick]
    [dev.lhrb.pommes.pommes-connection.views.access :as access-view]
    [dev.lhrb.pommes.pommes-connection.views.actions :as actions-view]
+   [dev.lhrb.pommes.pommes-connection.views.black-market :as black-market-view]
    [dev.lhrb.pommes.pommes-connection.views.dashboard :as dashboard]
    [dev.lhrb.pommes.pommes-connection.views.dishes :as dishes-view]
    [dev.lhrb.pommes.pommes-connection.views.game :as game-view]
@@ -234,6 +235,39 @@
            (str location "research-result=invalid"))))
       (response/status (response/response "Log in to access this game.") 401))))
 
+(defn- black-market-notice [params]
+  (case (:black-market-result params)
+    "purchased" ["good" (str "Schwarzmarkt-Ausbau auf Stufe " (:level params) " verbessert.")]
+    "funds" ["error" "Dafür reicht deine Buden-Kasse nicht."]
+    "maximum" ["warning" "Dieses Geschäft ist bereits ausgereizt."]
+    "invalid" ["error" "Diesen Schwarzmarkt-Ausbau gibt es nicht."]
+    nil))
+
+(defn- black-market-page [datasource request]
+  (if-let [data (authorized-data datasource request)]
+    (black-market-view/page (assoc data
+                                   :items (game-repository/black-market-statuses
+                                           datasource (get-in data [:viewer :id])
+                                           (get-in data [:viewer :money]))
+                                   :notice (black-market-notice (:params request))
+                                   :anti-forgery-token (:anti-forgery-token request)))
+    (response/status (response/response "Log in to access this game.") 401)))
+
+(defn- purchase-black-market [datasource request]
+  (let [game-token (get-in request [:path-params :game-token])]
+    (if-let [data (authorized-data datasource request)]
+      (let [result (game-repository/purchase-black-market!
+                    datasource (get-in data [:viewer :id])
+                    (some-> (get-in request [:params :item-id]) str keyword))
+            location (str "/games/" (game-repository/normalize-token game-token) "/black-market?")]
+        (response/redirect
+         (case (:error result)
+           nil (str location "black-market-result=purchased&level=" (:level result))
+           :insufficient-funds (str location "black-market-result=funds")
+           :maximum-level (str location "black-market-result=maximum")
+           (str location "black-market-result=invalid"))))
+      (response/status (response/response "Log in to access this game.") 401))))
+
 (defn- create-game-page [request]
   (access-view/create-page {:anti-forgery-token (:anti-forgery-token request)}))
 
@@ -324,7 +358,10 @@
       :post (fn [request] (purchase-action datasource request))}]
     ["/games/:game-token/research"
      {:get (fn [request] (research-page datasource request))
-      :post (fn [request] (purchase-research datasource request))}]]))
+      :post (fn [request] (purchase-research datasource request))}]
+    ["/games/:game-token/black-market"
+     {:get (fn [request] (black-market-page datasource request))
+      :post (fn [request] (purchase-black-market datasource request))}]]))
 
 (comment
   ;; Add feature routes here as the corresponding feature is implemented.

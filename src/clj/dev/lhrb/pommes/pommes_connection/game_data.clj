@@ -37,6 +37,24 @@
                    :effect :order-value :toppings #{:mayo :ketchup-mayo :garlic-sauce}
                    :maximum-modifier 0.30}}}
 
+   :black-market
+   {:cost {:base 20.0 :multiplier 2.0 :maximum-level 25}
+    :tax-rate 0.19
+    :suspicion-factor 0.02
+    :audit-every-ticks 10
+    :base-audit-chance 0.05
+    :audit-penalty-ticks 10
+    :items
+    {:creative-bookkeeping {:id :creative-bookkeeping :name "Kreative Buchführung"
+                            :description "Einnahmen verschwinden zwischen den Zeilen."
+                            :maximum-concealment 0.10}
+     :cash-only-register {:id :cash-only-register :name "Nur-Bar-Kasse"
+                           :description "Die Kasse kennt erstaunlich wenig Kartenumsatz."
+                           :maximum-concealment 0.10}
+     :uncle-rudis-accounting {:id :uncle-rudis-accounting :name "Onkel Rudis Buchhaltung"
+                               :description "Onkel Rudi findet für alles eine Quittung."
+                               :maximum-concealment 0.10}}}
+
    :catalog
    {:sizes {:small {:cost 0.55}
             :medium {:cost 0.70}
@@ -249,7 +267,7 @@
        :interior {:classic 0.3 :modern 0.8 :cozy 0.8 :street-food 0.7 :premium 1.0}}}]}})
 
 (defn simulation-config []
-  (select-keys game-data [:rules :regulars :research :catalog :city :market]))
+  (select-keys game-data [:rules :regulars :research :black-market :catalog :city :market]))
 
 (defn starter-setup []
   (get-in game-data [:setup :starter]))
@@ -265,6 +283,12 @@
 
 (defn research-item [research-id]
   (get (research-items) research-id))
+
+(defn black-market-items []
+  (get-in game-data [:black-market :items]))
+
+(defn black-market-item [item-id]
+  (get (black-market-items) item-id))
 
 (comment
   ;; Add a topping, interior, or demographic by editing game-data.

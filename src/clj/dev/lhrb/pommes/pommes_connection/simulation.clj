@@ -1,5 +1,6 @@
 (ns dev.lhrb.pommes.pommes-connection.simulation
   (:require
+   [dev.lhrb.pommes.pommes-connection.black-market :as black-market]
    [dev.lhrb.pommes.pommes-connection.demographics-simulation :as demographics-simulation]
    [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
    [dev.lhrb.pommes.pommes-connection.regulars-simulation :as regulars]
@@ -909,7 +910,7 @@
 (defn update-player
   [player stats]
   (-> player
-      ;; Money changes by profit, not revenue.
+      ;; Money changes by tax-adjusted profit, not revenue.
       (update
        :money
        (fnil + 0.0)
@@ -1118,6 +1119,7 @@
   [{:keys [tick
            city
            catalog
+           black-market
            players
            rules
            market]
@@ -1202,8 +1204,11 @@
         updated-players
         (mapv
          (fn [player]
-           (assoc (update-player player (get stats (:id player) empty-stats))
-                  :regulars (get updated-regulars (:id player) {})))
+           (let [[taxed-player receipt]
+                 (black-market/settle-player black-market (inc (or tick 0)) player
+                                             (get stats (:id player) empty-stats))]
+             (assoc (update-player taxed-player receipt)
+                    :regulars (get updated-regulars (:id player) {}))))
          players)
 
         updated-market
