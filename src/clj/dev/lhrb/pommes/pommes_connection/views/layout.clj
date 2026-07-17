@@ -121,6 +121,7 @@
           [:link {:rel "stylesheet" :href "/assets/css/app.css"}]
           [:script {:defer true :src "https://unpkg.com/htmx.org@2.0.4"}]
           [:script {:defer true :src "https://unpkg.com/alpinejs@3.14.8/dist/cdn.min.js"}]
+          [:script {:defer true :src "/assets/js/dishes.js"}]
           [:title title]]
          [:body content]])))
 
