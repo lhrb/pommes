@@ -26,3 +26,5 @@ Clojure.
 - prefer (comment ) example over tests
 - test should be minimal and as significant as possible
 
+## Writing style
+- for user facing texts consult narrative.md

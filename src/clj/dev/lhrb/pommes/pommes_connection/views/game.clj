@@ -55,7 +55,9 @@
          (str (:name game) " | Pommes Connection")
          [:main
           [:header.masthead
-          [:p.eyebrow "Pommes Connection · Lokalausgabe"]
+           [:div.masthead__top
+            [:img {:src "/assets/icons/pommes.svg" :width 24 :height 24 :alt "" :aria-hidden "true"}]
+            [:p.eyebrow "Pommes Connection · Lokalausgabe"]]
            [:h1 (:name game)]
            [:p.subhead (str "Bude: " (:name viewer) " · ") (layout/badge (str "Tick " (:tick game)))]
            [:div {:data-game-refresh true

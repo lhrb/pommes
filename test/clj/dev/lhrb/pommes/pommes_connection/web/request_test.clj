@@ -13,3 +13,10 @@
       (is (= 200 (:status response)))
       (is (re-find #"Server: bereit" (:body response)))
       (is (re-find #"Datenbank: bereit" (:body response))))))
+
+(deftest static-asset-request-test []
+  (let [handler (:app/web (system-state))
+        response (GET handler "/assets/css/app.css" {} {})]
+    (is (= 200 (:status response)))
+    (is (re-find #"text/css" (get-in response [:headers "Content-Type"])))
+    (is (re-find #"background\.svg" (:body response)))))

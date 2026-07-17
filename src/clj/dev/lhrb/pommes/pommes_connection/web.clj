@@ -3,6 +3,7 @@
    [integrant.core :as ig]
    [reitit.ring :as ring]
    [ring.middleware.defaults :as defaults]
+   [ring.middleware.resource :as resource]
    [ring.util.response :as response]))
 
 (def site-defaults
@@ -14,6 +15,7 @@
        router
        (ring/create-default-handler
         {:not-found (constantly (response/not-found "Page not found"))}))
+      (resource/wrap-resource "public")
       (defaults/wrap-defaults site-defaults)))
 
 (comment
