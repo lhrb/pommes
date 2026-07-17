@@ -65,3 +65,25 @@ Note that this alias runs nREPL during development. To run nREPL in production (
 Run `clj -M:dev:nrepl` or `make repl`.
 
 Note that, just like with [CIDER](#cider), this alias runs nREPL during development. To run nREPL in production (typically when the system starts), use the kit-nrepl library through the +nrepl profile as described in [the documentation](https://kit-clj.github.io/docs/profiles.html#profiles).
+
+
+24×24 px neo-retro icons. Fixed 16-color master palette; maximum 6 colors per icon including outline. Hard pixel edges, no antialiasing, gradients or partial transparency. Use clear silhouettes, one shadow level and one highlight level. Maintain consistent light from the upper left. Strict technical limits; free interpretation of shape and character.
+
+https://lospec.com/palette-list/shiny-16
+
+#1f1723
+#3c2f52
+#8c7f90
+#bcb0b3
+#e2e2e2
+#d86830
+#f09548
+#efd081
+#b22741
+#f5464c
+#f79c88
+#4656a5
+#4995f3
+#72deeb
+#3ec54b
+#b4e656 
