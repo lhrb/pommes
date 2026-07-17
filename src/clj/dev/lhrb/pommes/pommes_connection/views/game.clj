@@ -80,35 +80,6 @@
                             (layout/stat-row "Gewinn" (money (:profit viewer-result)))
                             (layout/stat-row "Kasse" (money (:money viewer-result)))]
                            [:p "Noch keine Einnahmen. Bau ein Menü, bevor der erste Mob auftaucht."])])
-          (layout/panel "panel--yellow"
-                        [[:h2 "Gerichte & Markt"]
-                         [:p "Stell deine Karte zusammen und sieh sofort, welche Kundschaft du damit erreichen kannst."]
-                         [:a.button {:href (str "/games/" (:game-token game) "/dishes")}
-                          "Gerichte & Markt öffnen"]])
-          (layout/panel "panel--yellow"
-                        [[:h2 "Aktionen"]
-                         [:p "Schick Gerüchte, Rocker oder Influencer los und bring den Markt durcheinander."]
-                         [:a.button {:href (str "/games/" (:game-token game) "/actions")}
-                          "Aktionen öffnen"]])
-          (layout/panel "panel--yellow"
-                        [[:h2 "Forschung & Stammgäste"]
-                         [:p "Verbessere deine Pommes und baue dir eine treue Kundschaft auf."]
-                         [:a.button {:href (str "/games/" (:game-token game) "/research")}
-                         "Forschung öffnen"]])
-          (layout/panel "panel--yellow"
-                        [[:h2 "Schwarzmarkt"]
-                         [:p "Verberge Einnahmen, spare Steuern und halte den Verdacht im Griff."]
-                         [:a.button {:href (str "/games/" (:game-token game) "/black-market")}
-                          "Schwarzmarkt öffnen"]])
-          (layout/panel "panel--yellow"
-                        [[:h2 "Stadtstatistik"]
-                         [:p "Sieh, wer welche Nachbarschaft erobert und wer bei Forschung und Kasse vorne liegt."]
-                         [:a.button {:href (str "/games/" (:game-token game) "/stats")}
-                          "Stadtstatistik öffnen"]])
-          (layout/panel "panel--tight"
-                        [[:h2 "Rivalenradar"]
-                         [:p.meta "Gerücht: Irgendwer um die Ecke denkt schon wieder über Rabatt nach."]
-                         [:div.grid.grid--two (map #(player-card % viewer) players)]])
           (chronicle-panel game events)
           (when viewer-result
             (layout/panel "panel--tight"
