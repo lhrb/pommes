@@ -20,20 +20,20 @@
    {:cost {:base 20.0 :multiplier 2.0 :maximum-level 25}
     :items
     {:potato-quality {:id :potato-quality :name "Kartoffelqualität"
-                      :description "Zufriedene Gäste werden eher Stammgäste."
+                      :description "Der Kartoffelhändler verspricht eine festere Sorte. Er hat dafür einen Stempel."
                       :effect :conversion :maximum-modifier 0.30}
      :fryer {:id :fryer :name "Fritteuse"
-              :description "Konstantere Pommes überzeugen neue Stammgäste."
+              :description "Die Fritteuse hält die Temperatur. Zumindest, wenn man sie nicht dabei beobachtet."
               :effect :conversion :maximum-modifier 0.30}
      :fry-grease {:id :fry-grease :name "Frittierfett"
-                   :description "Stammgäste kommen zuverlässiger wieder."
+                   :description "Das Fett wird regelmäßig gewechselt. Der Schichtleiter führt darüber ein Heft."
                    :effect :reliability :maximum-modifier 0.30}
      :ketchup-recipe {:id :ketchup-recipe :name "Ketchup-Rezept"
-                      :description "Ketchup-Stammgäste bestellen wertvoller."
+                      :description "Das Rezept ist geheim. Drei Leute kennen es, und keiner darf gleichzeitig Urlaub nehmen."
                       :effect :order-value :toppings #{:ketchup :ketchup-mayo :curry-ketchup}
                       :maximum-modifier 0.30}
      :mayo-recipe {:id :mayo-recipe :name "Mayo-Rezept"
-                   :description "Mayo-Stammgäste bestellen wertvoller."
+                   :description "Die Mayo wird nach Vorschrift gerührt. Die Vorschrift ist älter als die Bude."
                    :effect :order-value :toppings #{:mayo :ketchup-mayo :garlic-sauce}
                    :maximum-modifier 0.30}}}
 
