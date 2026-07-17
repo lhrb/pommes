@@ -2,7 +2,6 @@
   (:require
    [clojure.string :as str]
    [dev.lhrb.pommes.pommes-connection.views.layout :as layout]
-   [hiccup.util :as hiccup]
    [ring.util.response :as response]))
 
 (defn- money [value]
@@ -10,9 +9,6 @@
 
 (defn- quantity [value]
   (format "%d" (long (Math/round (double (or value 0.0))))))
-
-(def refresh-script
-  "(function(){var r=document.querySelector('[data-game-refresh]');if(!r)return;var end=Number(r.dataset.nextTickAt),now=Number(r.dataset.serverNow),loaded=performance.now(),out=document.getElementById('next-tick-countdown'),sent=false;function tick(){var left=Math.max(0,end-now-(performance.now()-loaded)),s=Math.ceil(left/1000);if(out)out.textContent=s>59?Math.floor(s/60)+'m '+(s%60)+'s':s+'s';if(!sent&&left===0){sent=true;document.body.dispatchEvent(new Event('pommes:tick'));}}tick();window.setInterval(tick,1000);})();")
 
 (defn- viewer-tick-summary [latest-tick viewer-id]
   (some #(when (= viewer-id (:player-id %)) %) (:players latest-tick)))
@@ -49,25 +45,13 @@
      "Ganze Chronik lesen"]]))
 
 (defn page
-  [{:keys [game viewer players latest-tick scheduled-for server-now events hx?]}]
+  [{:keys [game viewer players latest-tick scheduled-for events hx?]}]
   (let [viewer-result (viewer-tick-summary latest-tick (:id viewer))]
     (-> (layout/game-response
          (str (:name game) " | Pommes Connection") game viewer :game
          [[:header.screen-head
            (layout/icon "nav_game" "")
            [:div [:h1 "Deine Bude"] [:p (:name viewer) " · Tick " (:tick game)]]]
-           [:div {:data-game-refresh true
-                  :data-game-token (:game-token game)
-                  :data-next-tick-at (:next-tick-at game)
-                  :data-server-now server-now
-                  :hx-get (str "/games/" (:game-token game))
-                  :hx-trigger "pommes:tick from:body"
-                  :hx-target "#game-screen"
-                  :hx-swap "outerHTML"}
-            [:p.meta "Nächster Ansturm in " [:strong {:id "next-tick-countdown"} "…"]]]
-           [:label.meta {:for "automatic-refresh"}
-            [:input {:id "automatic-refresh" :type "checkbox" :checked true}]
-            " Automatisch aktualisieren"]
           (let [[kind message] (city-notice game viewer-result scheduled-for)]
             (layout/notice kind message))
           (layout/panel "panel--yellow"
@@ -93,7 +77,7 @@
                          [:p.invite "Einladungslink · weitere Fritteuse gesucht: "
                           [:a {:href (str "/join/" (:invite-token game))}
                            (str "/join/" (:invite-token game))]]])
-          [:script (hiccup/raw-string refresh-script)]] hx?)
+          ] hx?)
         response/response
         (response/content-type "text/html; charset=utf-8"))))
 
