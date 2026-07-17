@@ -58,6 +58,10 @@
 (defn- tick-summary
   [state]
   {:tick (:tick state)
+   :demographic-unserved-demand
+   (into {}
+         (map (juxt :demographic-id :unserved-demand)
+              (:last-market state)))
    :players
    (mapv (fn [{:keys [id money prestige regulars last-tick]}]
            {:player-id id

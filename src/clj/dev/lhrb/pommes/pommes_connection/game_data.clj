@@ -98,7 +98,7 @@
    :actions
    {:send-punks
     {:id :send-punks
-     :name "Send Punks"
+     :name "Die Punks kommen"
      :target :other-player
      :duration 12
      :cooldown 18
@@ -109,7 +109,7 @@
                {:type :global-attraction :modifier -0.15}]}
     :rocker-meeting
     {:id :rocker-meeting
-     :name "Rocker Meeting"
+     :name "Motorräder vor der Tür"
      :target :other-player
      :duration 18
      :cooldown 18
@@ -120,7 +120,7 @@
                {:type :global-attraction :modifier -0.15}]}
     :influencer-visit
     {:id :influencer-visit
-     :name "Influencer Visit"
+     :name "Besuch mit Ringlicht"
      :target :any-player
      :duration 9
      :cooldown 18
@@ -130,7 +130,7 @@
                {:type :price-tolerance :modifier 0.15}]}
     :parking-chaos
     {:id :parking-chaos
-     :name "Parking Chaos"
+     :name "Neue Parkplatzordnung"
      :target :other-player
      :duration 15
      :cooldown 21
@@ -141,7 +141,7 @@
                {:type :average-order-size :modifier -0.10}]}
     :review-bomb
     {:id :review-bomb
-     :name "Review Bomb"
+     :name "Erfahrungsberichte"
      :target :other-player
      :duration 9
      :cooldown 21
@@ -152,7 +152,7 @@
                {:type :price-tolerance :modifier -0.15}]}
     :neighborhood-festival
     {:id :neighborhood-festival
-     :name "Neighborhood Festival"
+     :name "Das Nachbarschaftsfest"
      :target :any-player
      :duration 12
      :cooldown 18

@@ -6,19 +6,19 @@
 (defn- money [value] (str "€" (str/replace (format "%.2f" (double (or value 0.0))) "." ",")))
 (def action-icons {:send-punks "action_punk" :rocker-meeting "action_rocker" :influencer-visit "action_influenca"
                    :parking-chaos "action_park_chaos" :review-bomb "action_review_bomb" :neighborhood-festival "action_festival"})
-(defn- label [value] ({:students "Studierende" :families "Familien" :retirees "Rentner" :office-workers "Büromenschen" :yuppies "Yuppies" :foodies "Feinschmecker"} value (name value)))
-(defn- effect-label [{:keys [type demographic modifier]}]
-  (case type :demographic-attraction (str (if (neg? modifier) "Weniger " "Mehr ") (label demographic))
-        :demographic-repulsion (str "Weniger " (label demographic))
-        :global-attraction (str (format "%+.0f%%" (* 100 modifier)) " Anziehung")
-        :average-order-size (str (format "%+.0f%%" (* 100 modifier)) " Bestellgröße")
-        :price-tolerance (str (format "%+.0f%%" (* 100 modifier)) " Preistoleranz") (name type)))
+(def action-stories
+  {:send-punks "Die Punks kommen mit einem Kassettenrekorder, dessen Batterien seit 2004 als politisch gelten. Nach zwei Liedern diskutiert der Hausmeister mit ihnen über Zuständigkeiten."
+   :rocker-meeting "Vor der Tür stehen Motorräder in einer Ordnung, die nur der Vorsitzende versteht. Drinnen wird über Lautstärke gesprochen, als sei sie eine Genehmigung."
+   :influencer-visit "Ein Mensch mit Ringlicht bestellt etwas Kleines und nennt es einen Moment. Bald stehen Leute davor und warten darauf, dass der Moment wieder aufgeht."
+   :parking-chaos "Jemand hat die Parkplätze neu ausgelegt, ohne die Autos zu informieren. Ein Kombi steht quer und sein Besitzer vertritt inzwischen eine Haltung."
+   :review-bomb "Plötzlich weiß das Internet sehr genau, was hier angeblich passiert. Die meisten Verfasser waren noch nie da, aber einer kennt die Speisekarte von früher."
+   :neighborhood-festival "Der Nachbarschaftsrat hat Bierzeltgarnituren bestellt und keine Rückfrage zugelassen. Gegen Abend sind die Pommesgabeln knapp, doch die Stimmung gilt als geregelt."})
 (defn- targets [action viewer players] (case (:target action) :other-player (remove #(= (:id %) (:id viewer)) players) :any-player players []))
 
 (defn action-card [game viewer players token action]
   (let [options (targets action viewer players) id (name (:id action))]
     [:article {:id (str "action-" id) :class "offer-card action-card"}
-     [:div.offer-card__top (layout/icon (get action-icons (:id action) "nav_action") "") [:div [:h2 (:name action)] [:p.meta (str/join " · " (map effect-label (:effects action)))]]]
+     [:div.offer-card__top (layout/icon (get action-icons (:id action) "nav_action") "") [:div [:h2 (:name action)] [:p.meta (get action-stories (:id action))]]]
      [:p.meta (str "Wirkt " (* 30 (:duration action)) " Sek. · Pause " (* 30 (:cooldown action)) " Sek.")]
      [:p [:strong (money (:cost action))] " · " (if (:available? action) "bereit" (str "bereit ab Tick " (:available-at-tick action)))]
      [:form {:method "post" :action (str "/games/" (:game-token game) "/actions")
@@ -37,3 +37,6 @@
 
 (defn mutation [{:keys [game viewer players actions anti-forgery-token action-id kind message]}]
   (layout/mutation-response (action-card game viewer players anti-forgery-token (some #(when (= (:id %) action-id) %) actions)) viewer kind message))
+
+(comment
+  (get action-stories :send-punks))

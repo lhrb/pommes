@@ -182,12 +182,12 @@
               (response/redirect (str "/games/" (game-repository/normalize-token game-token)
                                       "/dishes?scheduled-for=" apply-at-tick)))))))))
 
-(defn- preview-dishes [datasource request]
+(defn- dish-impact [datasource request]
   (if-let [data (authorized-data datasource request)]
     (let [{:keys [errors setup]} (setup-from-params (:params request))]
       (if (seq errors)
         (response/status (response/response "<p class=\"errors\">Bitte fülle alle Menüfelder gültig aus.</p>") 422)
-        (-> (dishes-view/forecast-panel (forecast-for datasource data setup))
+        (-> (dishes-view/impact-panel (forecast-for datasource data setup))
             h/html str response/response (response/content-type "text/html; charset=utf-8"))))
     (response/status (response/response "Log in to access this game.") 401)))
 
@@ -392,8 +392,8 @@
      {:get (fn [request] (dishes-page datasource request))}]
     ["/games/:game-token/dishes/setup"
      {:post (fn [request] (schedule-setup datasource request))}]
-    ["/games/:game-token/dishes/preview"
-     {:post (fn [request] (preview-dishes datasource request))}]
+    ["/games/:game-token/dishes/impact"
+     {:post (fn [request] (dish-impact datasource request))}]
     ["/games/:game-token/actions"
      {:get (fn [request] (actions-page datasource request))
       :post (fn [request] (purchase-action datasource request))}]
