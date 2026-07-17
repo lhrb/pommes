@@ -10,6 +10,7 @@
    [dev.lhrb.pommes.pommes-connection.views.dashboard :as dashboard]
    [dev.lhrb.pommes.pommes-connection.views.dishes :as dishes-view]
    [dev.lhrb.pommes.pommes-connection.views.game :as game-view]
+   [dev.lhrb.pommes.pommes-connection.views.layout :as layout]
    [dev.lhrb.pommes.pommes-connection.views.research :as research-view]
    [dev.lhrb.pommes.pommes-connection.views.stats :as stats-view]
    [dev.lhrb.pommes.pommes-connection.views.wiki :as wiki-view]
@@ -114,6 +115,13 @@
                   (get-in request [:session :game-token]))
                game-player-id)
       (overview datasource game-token game-player-id))))
+
+(defn- game-hud [datasource request]
+  (if-let [data (authorized-data datasource request)]
+    (-> (layout/game-hud-response (:game data) (:viewer data) (System/currentTimeMillis))
+        response/response
+        (response/content-type "text/html; charset=utf-8"))
+    (response/status (response/response "Log in to access this game.") 401)))
 
 (defn- chronicle-page [datasource request]
   (if-let [data (authorized-data datasource request)]
@@ -376,6 +384,8 @@
       :post (fn [request] (login datasource request))}]
     ["/games/:game-token"
      {:get (fn [request] (player-page datasource request))}]
+    ["/games/:game-token/hud"
+     {:get (fn [request] (game-hud datasource request))}]
     ["/games/:game-token/chronicle"
      {:get (fn [request] (chronicle-page datasource request))}]
     ["/games/:game-token/dishes"

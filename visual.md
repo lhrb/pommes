@@ -42,6 +42,11 @@ Every page lives inside one persistent mobile game interface:
 - use the most applicable size for the situation.
 - header picture header.png
 
+## general
+
+increase    arrow_up_96.png
+decrease    arrow_down_96.png
+
 ### game stats
 
 player money            res_money_96.png
@@ -87,3 +92,5 @@ reseach_majo_96.png
 research_fryer_96.png
 research_grease_96.png
 research_potato_96.png
+
+

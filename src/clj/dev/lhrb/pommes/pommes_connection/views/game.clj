@@ -45,7 +45,7 @@
      "Ganze Chronik lesen"]]))
 
 (defn page
-  [{:keys [game viewer players latest-tick scheduled-for events hx?]}]
+  [{:keys [game viewer players latest-tick scheduled-for events hx? server-now]}]
   (let [viewer-result (viewer-tick-summary latest-tick (:id viewer))]
     (-> (layout/game-response
          (str (:name game) " | Pommes Connection") game viewer :game
@@ -77,7 +77,7 @@
                          [:p.invite "Einladungslink · weitere Fritteuse gesucht: "
                           [:a {:href (str "/join/" (:invite-token game))}
                            (str "/join/" (:invite-token game))]]])
-          ] hx?)
+          ] hx? server-now)
         response/response
         (response/content-type "text/html; charset=utf-8"))))
 
