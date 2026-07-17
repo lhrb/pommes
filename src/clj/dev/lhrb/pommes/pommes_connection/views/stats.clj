@@ -135,15 +135,10 @@
                      "Keine Prüfung")
                    " · " (active-effects player))]])]]]))
 
-(defn page [{:keys [game viewer players city]}]
-  (let [body (layout/page
-              (str (:name game) " | Stadtstatistik")
-              [:main
-               [:header.masthead
-                [:p.eyebrow "Pommes Connection · Lokalausgabe"]
-                [:h1 "Stadtstatistik"]
-                [:p.subhead (:name game) " · Tick " (:tick game)]
-                [:p.meta [:a {:href (str "/games/" (:game-token game))} "← Zur Budenübersicht"]]]
+(defn page [{:keys [game viewer players city hx?]}]
+  (let [body (layout/game-response
+              (str (:name game) " | Stadtstatistik") game viewer :stats
+              [[:header.screen-head (layout/icon "nav_stats" "") [:div [:h1 "Stadtstatistik"] [:p (:name game) " · Tick " (:tick game)]]]
                (layout/notice "quiet"
                               (str "Öffentliche Zahlen für " (:name viewer)
                                    " und alle anderen Buden."))
@@ -151,7 +146,7 @@
                (market-share-panel city players)
                (leaderboard-panel players)
                (research-panel players)
-               (underworld-panel players)])]
+               (underworld-panel players)] hx?)]
     (response/content-type (response/response body) "text/html; charset=utf-8")))
 
 (comment

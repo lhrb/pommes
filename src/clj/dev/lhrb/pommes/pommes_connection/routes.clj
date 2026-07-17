@@ -12,10 +12,13 @@
    [dev.lhrb.pommes.pommes-connection.views.game :as game-view]
    [dev.lhrb.pommes.pommes-connection.views.research :as research-view]
    [dev.lhrb.pommes.pommes-connection.views.stats :as stats-view]
+   [dev.lhrb.pommes.pommes-connection.views.wiki :as wiki-view]
    [integrant.core :as ig]
    [reitit.ring :as ring]
    [hiccup2.core :as h]
    [ring.util.response :as response]))
+
+(defn- htmx? [request] (= "true" (get-in request [:headers "hx-request"])))
 
 (defn- choice [value options]
   (let [candidate (some-> value str keyword)]
@@ -100,7 +103,8 @@
                              :scheduled-for (get-in request [:params :scheduled-for])
                              :anti-forgery-token (:anti-forgery-token request)
                              :events (game-repository/load-game-events datasource (get-in data [:game :id]) 5 0)
-                             :server-now (System/currentTimeMillis)))
+                             :server-now (System/currentTimeMillis)
+                             :hx? (htmx? request)))
       (response/status (response/response "Log in to access this game.") 401))))
 
 (defn- authorized-data [datasource request]
@@ -123,7 +127,8 @@
        (assoc data
               :events (game-repository/load-game-events datasource game-id page-size (* page page-size))
               :page page
-              :page-count page-count)))
+              :page-count page-count
+              :hx? (htmx? request))))
     (response/status (response/response "Log in to access this game.") 401)))
 
 (defn- forecast-for [datasource data setup]
@@ -139,7 +144,8 @@
       (dishes-view/page (assoc data
                                :forecast (forecast-for datasource data setup)
                                :scheduled-for (get-in request [:params :scheduled-for])
-                               :anti-forgery-token (:anti-forgery-token request))))
+                               :anti-forgery-token (:anti-forgery-token request)
+                               :hx? (htmx? request))))
     (response/status (response/response "Log in to access this game.") 401)))
 
 (defn- schedule-setup [datasource request]
@@ -157,12 +163,16 @@
                                                    :form form :errors errors
                                                    :forecast (forecast-for datasource data
                                                                             (select-keys (:viewer data) [:interior :dishes]))
-                                                   :anti-forgery-token (:anti-forgery-token request)))
+                                                   :anti-forgery-token (:anti-forgery-token request)
+                                                   :hx? (htmx? request)))
                            400)
-          (let [apply-at-tick (game-repository/schedule-setup! datasource game-player-id setup)]
-            (response/redirect
-             (str "/games/" (game-repository/normalize-token game-token)
-                  "/dishes?scheduled-for=" apply-at-tick))))))))
+          (let [apply-at-tick (game-repository/schedule-setup! datasource game-player-id setup)
+                fresh (authorized-data datasource request)]
+            (if (htmx? request)
+              (dishes-view/page (assoc fresh :forecast (forecast-for datasource fresh setup)
+                                        :scheduled-for apply-at-tick :anti-forgery-token (:anti-forgery-token request) :hx? true))
+              (response/redirect (str "/games/" (game-repository/normalize-token game-token)
+                                      "/dishes?scheduled-for=" apply-at-tick)))))))))
 
 (defn- preview-dishes [datasource request]
   (if-let [data (authorized-data datasource request)]
@@ -198,24 +208,21 @@
       (actions-view/page (assoc data
                                 :actions statuses
                                 :notice (action-notice (:params request))
-                                :anti-forgery-token (:anti-forgery-token request))))
+                                :anti-forgery-token (:anti-forgery-token request)
+                                :hx? (htmx? request))))
     (response/status (response/response "Log in to access this game.") 401)))
 
 (defn- purchase-action [datasource request]
-  (let [game-token (get-in request [:path-params :game-token])]
-    (if-let [data (authorized-data datasource request)]
+  (if-let [data (authorized-data datasource request)]
       (let [result (game-repository/purchase-action!
                     datasource (get-in data [:viewer :id])
                     (action-id (get-in request [:params :action-id]))
                     (player-id (get-in request [:params :target-player-id])))
-            location (str "/games/" (game-repository/normalize-token game-token) "/actions?")]
-        (response/redirect
-         (case (:error result)
-           nil (str location "action-result=scheduled&scheduled-for=" (:apply-at-tick result))
-           :cooldown (str location "action-result=cooldown&available-at=" (:available-at-tick result))
-           :insufficient-funds (str location "action-result=funds")
-           (str location "action-result=invalid"))))
-      (response/status (response/response "Log in to access this game.") 401))))
+            fresh (authorized-data datasource request)
+            statuses (game-repository/action-statuses datasource (get-in fresh [:game :id]) (get-in fresh [:viewer :id]) (get-in fresh [:game :tick]) (get-in fresh [:viewer :money]))
+            [kind message] (case (:error result) nil ["good" (str "AKTION NOTIERT · TICK " (:apply-at-tick result))] :cooldown ["warning" "NOCH NICHT WIEDER BEREIT"] :insufficient-funds ["error" "NICHT GENUG GELD"] ["error" "DIESE AKTION GEHT HIER NICHT"])]
+        (-> (actions-view/mutation {:game (:game fresh) :viewer (:viewer fresh) :players (:players fresh) :actions statuses :anti-forgery-token (:anti-forgery-token request) :action-id (action-id (get-in request [:params :action-id])) :kind kind :message message}) response/response (response/content-type "text/html; charset=utf-8")))
+      (response/status (response/response "Log in to access this game.") 401)))
 
 (defn- research-id [value]
   (some-> value str keyword))
@@ -235,27 +242,24 @@
                                           datasource (get-in data [:game :id]) (get-in data [:viewer :id])
                                           (get-in data [:viewer :money]))
                                :notice (research-notice (:params request))
-                               :anti-forgery-token (:anti-forgery-token request)))
+                               :anti-forgery-token (:anti-forgery-token request)
+                               :hx? (htmx? request)))
     (response/status (response/response "Log in to access this game.") 401)))
 
 (defn- stats-page [datasource request]
   (if-let [data (authorized-data datasource request)]
-    (stats-view/page data)
+    (stats-view/page (assoc data :hx? (htmx? request)))
     (response/status (response/response "Log in to access this game.") 401)))
 
 (defn- purchase-research [datasource request]
-  (let [game-token (get-in request [:path-params :game-token])]
-    (if-let [data (authorized-data datasource request)]
+  (if-let [data (authorized-data datasource request)]
       (let [result (game-repository/purchase-research! datasource (get-in data [:viewer :id])
                                                         (research-id (get-in request [:params :research-id])))
-            location (str "/games/" (game-repository/normalize-token game-token) "/research?")]
-        (response/redirect
-         (case (:error result)
-           nil (str location "research-result=purchased&level=" (:level result))
-           :insufficient-funds (str location "research-result=funds")
-           :maximum-level (str location "research-result=maximum")
-           (str location "research-result=invalid"))))
-      (response/status (response/response "Log in to access this game.") 401))))
+            fresh (authorized-data datasource request)
+            research (game-repository/research-statuses datasource (get-in fresh [:game :id]) (get-in fresh [:viewer :id]) (get-in fresh [:viewer :money]))
+            [kind message] (case (:error result) nil ["good" "FORSCHUNG ABGESCHLOSSEN"] :insufficient-funds ["error" "NICHT GENUG GELD"] :maximum-level ["warning" "AUSGEFORSCHT"] ["error" "DIESES PROJEKT GIBT ES NICHT"])]
+        (-> (research-view/mutation {:game (:game fresh) :viewer (:viewer fresh) :research research :anti-forgery-token (:anti-forgery-token request) :research-id (research-id (get-in request [:params :research-id])) :kind kind :message message}) response/response (response/content-type "text/html; charset=utf-8")))
+      (response/status (response/response "Log in to access this game.") 401)))
 
 (defn- black-market-notice [params]
   (case (:black-market-result params)
@@ -272,23 +276,26 @@
                                            datasource (get-in data [:viewer :id])
                                            (get-in data [:viewer :money]))
                                    :notice (black-market-notice (:params request))
-                                   :anti-forgery-token (:anti-forgery-token request)))
+                                   :anti-forgery-token (:anti-forgery-token request)
+                                   :hx? (htmx? request)))
     (response/status (response/response "Log in to access this game.") 401)))
 
 (defn- purchase-black-market [datasource request]
-  (let [game-token (get-in request [:path-params :game-token])]
-    (if-let [data (authorized-data datasource request)]
+  (if-let [data (authorized-data datasource request)]
       (let [result (game-repository/purchase-black-market!
                     datasource (get-in data [:viewer :id])
                     (some-> (get-in request [:params :item-id]) str keyword))
-            location (str "/games/" (game-repository/normalize-token game-token) "/black-market?")]
-        (response/redirect
-         (case (:error result)
-           nil (str location "black-market-result=purchased&level=" (:level result))
-           :insufficient-funds (str location "black-market-result=funds")
-           :maximum-level (str location "black-market-result=maximum")
-           (str location "black-market-result=invalid"))))
-      (response/status (response/response "Log in to access this game.") 401))))
+            fresh (authorized-data datasource request)
+            items (game-repository/black-market-statuses datasource (get-in fresh [:viewer :id]) (get-in fresh [:viewer :money]))
+            item-id (some-> (get-in request [:params :item-id]) str keyword)
+            [kind message] (case (:error result) nil ["good" "BUCHHALTUNG VERBESSERT"] :insufficient-funds ["error" "NICHT GENUG GELD"] :maximum-level ["warning" "AUSGEREIZT"] ["error" "DIESEN AUSBAU GIBT ES NICHT"])]
+        (-> (black-market-view/mutation {:game (:game fresh) :viewer (:viewer fresh) :items items :anti-forgery-token (:anti-forgery-token request) :item-id item-id :kind kind :message message}) response/response (response/content-type "text/html; charset=utf-8")))
+      (response/status (response/response "Log in to access this game.") 401)))
+
+(defn- wiki-page [datasource request]
+  (if-let [data (authorized-data datasource request)]
+    (wiki-view/page (assoc data :hx? (htmx? request)))
+    (response/status (response/response "Log in to access this game.") 401)))
 
 (defn- create-game-page [request]
   (access-view/create-page {:anti-forgery-token (:anti-forgery-token request)}))
@@ -385,6 +392,8 @@
       :post (fn [request] (purchase-research datasource request))}]
     ["/games/:game-token/stats"
      {:get (fn [request] (stats-page datasource request))}]
+    ["/games/:game-token/wiki"
+     {:get (fn [request] (wiki-page datasource request))}]
     ["/games/:game-token/black-market"
      {:get (fn [request] (black-market-page datasource request))
       :post (fn [request] (purchase-black-market datasource request))}]]))

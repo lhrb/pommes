@@ -22,8 +22,9 @@
 (defn create-page [{:keys [form errors anti-forgery-token]}]
   (-> (layout/page
        "Spiel eröffnen | Pommes Connection"
-       [:main
-        [:header.masthead
+       [:main.access-page
+        [:header.game-header
+         [:img.game-header__image {:src "/assets/img/header.png" :alt "Pommesbude bei Nacht"}]
          [:p.eyebrow "Pommes Connection · die Lokalredaktion"]
          [:h1 "Die Fritteuse ist eröffnet"]
          [:p.subhead "Eine neue Bude, ein neues Gerücht, eine frische Ladung."]]
@@ -46,8 +47,9 @@
 (defn join-page [{:keys [game form errors anti-forgery-token]}]
   (-> (layout/page
        "Spiel beitreten | Pommes Connection"
-       [:main
-        [:header.masthead
+       [:main.access-page
+        [:header.game-header
+         [:img.game-header__image {:src "/assets/img/header.png" :alt "Pommesbude bei Nacht"}]
          [:p.eyebrow "Extrablatt! Bude frei"]
          [:h1 "Komm in die Nachbarschaft"]
          [:p.subhead (str (:name game) " braucht noch eine Fritteuse.")]]
@@ -63,8 +65,9 @@
 (defn login-page [{:keys [game form errors anti-forgery-token]}]
   (-> (layout/page
        "Anmelden | Pommes Connection"
-       [:main
-        [:header.masthead
+       [:main.access-page
+        [:header.game-header
+         [:img.game-header__image {:src "/assets/img/header.png" :alt "Pommesbude bei Nacht"}]
          [:p.eyebrow "Pommes Connection · Nachtausgabe"]
          [:h1 "Zurück an die Bude"]
          [:p.subhead (str (:name game) " hat noch geöffnet.")]]
@@ -82,8 +85,9 @@
 (defn game-token-page []
   (-> (layout/page
        "Anmelden | Pommes Connection"
-       [:main
-        [:header.masthead
+       [:main.access-page
+        [:header.game-header
+         [:img.game-header__image {:src "/assets/img/header.png" :alt "Pommesbude bei Nacht"}]
          [:p.eyebrow "Straßenverzeichnis"]
          [:h1 "Finde dein Spiel"]
          [:p.subhead "Der Code steht auf der Einladung, vermutlich unter einem Klecks Ketchup."]]

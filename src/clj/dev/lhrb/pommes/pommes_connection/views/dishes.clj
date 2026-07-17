@@ -115,29 +115,24 @@
                                        (if (= sold leader) [:strong (quantity sold)] (quantity sold))])
                                     players sales)))]]]))))
 
-(def cost-and-preview-script
-  "(function () {\n  const form = document.getElementById('menu-form');\n  if (!form) return;\n  const updateCosts = function () { document.querySelectorAll('[data-dish]').forEach(function (dish) { const total = Array.from(dish.querySelectorAll('select option:checked')).reduce(function (sum, option) { return sum + Number(option.dataset.cost || 0); }, 0); dish.querySelector('[data-cost-total]').textContent = '€' + total.toFixed(2).replace('.', ','); }); };\n  let timer;\n  const preview = function () { window.clearTimeout(timer); timer = window.setTimeout(function () { fetch(form.dataset.previewUrl, {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams(new FormData(form))}).then(function (response) { return response.text(); }).then(function (html) { document.getElementById('market-forecast').innerHTML = html; }).catch(function () {}); }, 250); };\n  form.addEventListener('input', function () { updateCosts(); preview(); });\n  form.addEventListener('change', function () { updateCosts(); preview(); });\n  updateCosts();\n})();")
-
-(defn page [{:keys [game viewer players city latest-tick form errors scheduled-for anti-forgery-token forecast]}]
+(defn page [{:keys [game viewer players city latest-tick form errors scheduled-for anti-forgery-token forecast hx?]}]
   (let [options (setup-options)
         dishes (take (:dish-count options) (concat (or (:dishes form) (:dishes viewer)) (repeat {})))]
-    (-> (layout/page
-         (str "Gerichte & Markt | " (:name game))
-         [:main
-          [:header.masthead [:p.eyebrow "Pommes Connection · Menüwerkstatt"]
-           [:h1 "Gerichte & Markt"]
-           [:p.subhead (:name game) " · " (:name viewer)]
-           [:p.meta [:a {:href (str "/games/" (:game-token game))} "← Zur Budenübersicht"]]]
+    (-> (layout/game-response
+         (str "Gerichte & Markt | " (:name game)) game viewer :dishes
+         [[:header.screen-head (layout/icon "nav_dishes" "") [:div [:h1 "Gerichte & Markt"] [:p "Die Karte entscheidet, wer stehen bleibt."]]]
           (when scheduled-for (layout/notice "good" (str "Menüänderungen sind für Tick " scheduled-for " notiert.")))
           [:div {:id "market-forecast"} (forecast-panel forecast)]
           (latest-market-panel {:city city :players players :latest-tick latest-tick})
-          (layout/panel "panel--yellow"
-                        [[:h2 "Morgenkarte drucken"]
+          [:section {:id "menu-editor" :class "panel panel--yellow"}
+                         [:h2 "Morgenkarte drucken"]
                          [:p "Änderungen gelten ab dem nächsten Ansturm. Die Marktprognose reagiert direkt auf deine Eingaben."]
                          (when (seq errors) [:p.errors "Bitte korrigiere die markierten Menüdetails."])
                          [:form {:id "menu-form" :method "post"
                                  :action (str "/games/" (:game-token game) "/dishes/setup")
-                                 :data-preview-url (str "/games/" (:game-token game) "/dishes/preview")}
+                                 :hx-post (str "/games/" (:game-token game) "/dishes/preview")
+                                 :hx-trigger "input changed delay:350ms, change"
+                                 :hx-target "#market-forecast" :hx-swap "innerHTML"}
                           (when anti-forgery-token [:input {:type "hidden" :name "__anti-forgery-token" :value anti-forgery-token}])
                           [:fieldset [:legend "Innenleben"]
                            [:label {:for "interior"} "Budenstimmung"
@@ -145,8 +140,10 @@
                            (when-let [interior-errors (seq (:interior errors))]
                              [:ul.errors (for [error interior-errors] [:li error])])]
                           (map-indexed (fn [index dish] (dish-field options (inc index) dish errors)) dishes)
-                          (layout/button "Für den nächsten Tick eintragen")]])
-          [:script (hiccup/raw-string cost-and-preview-script)]])
+                          (layout/button {:type "button" :hx-post (str "/games/" (:game-token game) "/dishes/setup")
+                                          :hx-include "#menu-form" :hx-target "#game-screen" :hx-swap "outerHTML"}
+                                         "Für den nächsten Tick eintragen")]]]
+         hx?)
         response/response
         (response/content-type "text/html; charset=utf-8"))))
 

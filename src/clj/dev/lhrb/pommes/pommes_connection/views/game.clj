@@ -12,7 +12,7 @@
   (format "%d" (long (Math/round (double (or value 0.0))))))
 
 (def refresh-script
-  "(function () {\n  const refresh = document.querySelector(\"[data-game-refresh]\");\n  if (!refresh) return;\n\n  const nextTickAt = Number(refresh.dataset.nextTickAt);\n  const serverNow = Number(refresh.dataset.serverNow);\n  const pageLoadedAt = performance.now();\n  const initialRemainingMillis = nextTickAt - serverNow;\n  const storageKey = \"pommes-connection:auto-refresh:\" + refresh.dataset.gameToken;\n  const toggle = document.getElementById(\"automatic-refresh\");\n  const countdown = document.getElementById(\"next-tick-countdown\");\n  const status = document.getElementById(\"refresh-status\");\n  const menuForm = document.getElementById(\"menu-form\");\n  let dirty = false;\n  let reloadPending = false;\n\n  try { toggle.checked = localStorage.getItem(storageKey) !== \"false\"; } catch (_) { toggle.checked = true; }\n\n  const remainingMillis = function () { return Math.max(0, initialRemainingMillis - (performance.now() - pageLoadedAt)); };\n  const remainingLabel = function () {\n    const seconds = Math.ceil(remainingMillis() / 1000);\n    const minutes = Math.floor(seconds / 60);\n    return minutes > 0 ? minutes + \"m \" + (seconds % 60) + \"s\" : seconds + \"s\";\n  };\n\n  const update = function () {\n    countdown.textContent = Number.isFinite(initialRemainingMillis) ? remainingLabel() : \"gleich\";\n    if (toggle.checked && !dirty && Number.isFinite(initialRemainingMillis) && remainingMillis() === 0 && !reloadPending) {\n      reloadPending = true;\n      window.setTimeout(function () { window.location.reload(); }, 750);\n    }\n  };\n\n  toggle.addEventListener(\"change\", function () {\n    try { localStorage.setItem(storageKey, String(toggle.checked)); } catch (_) {}\n    status.textContent = toggle.checked ? (dirty ? \"Automatisches Aktualisieren wartet, solange du schraubst.\" : \"Automatisches Aktualisieren läuft.\") : \"Automatisches Aktualisieren ist aus.\";\n  });\n\n  if (menuForm) {\n    const pauseRefresh = function () { dirty = true; status.textContent = \"Automatisches Aktualisieren wartet, solange du schraubst.\"; };\n    menuForm.addEventListener(\"input\", pauseRefresh);\n    menuForm.addEventListener(\"change\", pauseRefresh);\n  }\n\n  update();\n  window.setInterval(update, 1000);\n})();")
+  "(function(){var r=document.querySelector('[data-game-refresh]');if(!r)return;var end=Number(r.dataset.nextTickAt),now=Number(r.dataset.serverNow),loaded=performance.now(),out=document.getElementById('next-tick-countdown'),sent=false;function tick(){var left=Math.max(0,end-now-(performance.now()-loaded)),s=Math.ceil(left/1000);if(out)out.textContent=s>59?Math.floor(s/60)+'m '+(s%60)+'s':s+'s';if(!sent&&left===0){sent=true;document.body.dispatchEvent(new Event('pommes:tick'));}}tick();window.setInterval(tick,1000);})();")
 
 (defn- viewer-tick-summary [latest-tick viewer-id]
   (some #(when (= viewer-id (:player-id %)) %) (:players latest-tick)))
@@ -49,27 +49,25 @@
      "Ganze Chronik lesen"]]))
 
 (defn page
-  [{:keys [game viewer players latest-tick scheduled-for server-now events]}]
+  [{:keys [game viewer players latest-tick scheduled-for server-now events hx?]}]
   (let [viewer-result (viewer-tick-summary latest-tick (:id viewer))]
-    (-> (layout/page
-         (str (:name game) " | Pommes Connection")
-         [:main
-          [:header.masthead
-           [:div.masthead__top
-            [:img {:src "/assets/icons/pommes.svg" :width 24 :height 24 :alt "" :aria-hidden "true"}]
-            [:p.eyebrow "Pommes Connection · Lokalausgabe"]]
-           [:h1 (:name game)]
-           [:p.subhead (str "Bude: " (:name viewer) " · ") (layout/badge (str "Tick " (:tick game)))]
+    (-> (layout/game-response
+         (str (:name game) " | Pommes Connection") game viewer :game
+         [[:header.screen-head
+           (layout/icon "nav_game" "")
+           [:div [:h1 "Deine Bude"] [:p (:name viewer) " · Tick " (:tick game)]]]
            [:div {:data-game-refresh true
                   :data-game-token (:game-token game)
                   :data-next-tick-at (:next-tick-at game)
-                  :data-server-now server-now}
-            [:p.subhead "Nächster Ansturm in " [:strong {:id "next-tick-countdown"} "…"]]
-            [:label {:for "automatic-refresh" :style "font-size:13px;margin:8px 0 0"}
-             [:input {:id "automatic-refresh" :type "checkbox"
-                      :style "display:inline-block;width:18px;min-height:18px;margin:0 8px 0 0;padding:0;vertical-align:middle"}]
-             "Automatisch aktualisieren"]
-            [:p.meta {:id "refresh-status" :aria-live "polite"}]]]
+                  :data-server-now server-now
+                  :hx-get (str "/games/" (:game-token game))
+                  :hx-trigger "pommes:tick from:body"
+                  :hx-target "#game-screen"
+                  :hx-swap "outerHTML"}
+            [:p.meta "Nächster Ansturm in " [:strong {:id "next-tick-countdown"} "…"]]]
+           [:label.meta {:for "automatic-refresh"}
+            [:input {:id "automatic-refresh" :type "checkbox" :checked true}]
+            " Automatisch aktualisieren"]
           (let [[kind message] (city-notice game viewer-result scheduled-for)]
             (layout/notice kind message))
           (layout/panel "panel--yellow"
@@ -124,12 +122,12 @@
                          [:p.invite "Einladungslink · weitere Fritteuse gesucht: "
                           [:a {:href (str "/join/" (:invite-token game))}
                            (str "/join/" (:invite-token game))]]])
-          [:script (hiccup/raw-string refresh-script)]])
+          [:script (hiccup/raw-string refresh-script)]] hx?)
         response/response
         (response/content-type "text/html; charset=utf-8"))))
 
 (defn chronicle-page
-  [{:keys [game events page page-count]}]
+  [{:keys [game viewer events page page-count hx?]}]
   (let [navigation
         (when (> page-count 1)
           [:nav {:aria-label "Chronikseiten" :style "display:flex;gap:12px;margin-top:18px"}
@@ -139,14 +137,9 @@
            (when (< (inc page) page-count)
              [:a.button {:href (str "/games/" (:game-token game) "/chronicle?page=" (inc page))}
               "Ältere Meldungen"])])]
-    (-> (layout/page
-         (str (:name game) " | Stadtchronik")
-         [:main
-          [:header.masthead
-           [:p.eyebrow "Pommes Connection · Lokalausgabe"]
-           [:h1 "Stadtchronik"]
-           [:p.subhead (:name game) " · Was die Stadt nie vergessen wird."]
-           [:p.meta [:a {:href (str "/games/" (:game-token game))} "← Zur Budenübersicht"]]]
+    (-> (layout/game-response
+         (str (:name game) " | Stadtchronik") game viewer :chronicle
+         [[:header.screen-head (layout/icon "nav_chronic" "") [:div [:h1 "Stadtchronik"] [:p "Was die Stadt nie vergessen wird."]]]
           (layout/panel
            "panel--yellow"
            [[:h2 "Die Schlagzeilen"]
@@ -157,7 +150,7 @@
                   [:strong (str "Tick " tick " · ")]
                   message])]
               [:p "Noch keine Ereignisse. Die Stadt sammelt Material."])
-            navigation])])
+            navigation])] hx?)
         response/response
         (response/content-type "text/html; charset=utf-8"))))
 
