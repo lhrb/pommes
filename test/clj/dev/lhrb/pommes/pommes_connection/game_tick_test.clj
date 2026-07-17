@@ -318,6 +318,10 @@
               dishes-response (handler {:request-method :get
                                         :uri (str "/games/" game-token "/dishes")
                                         :session {:game-token game-token :game-player-id game-player-id}})
+              htmx-dishes-response (handler {:request-method :get
+                                             :uri (str "/games/" game-token "/dishes")
+                                             :headers {"hx-request" "true"}
+                                             :session {:game-token game-token :game-player-id game-player-id}})
               actions-response (handler {:request-method :get
                                          :uri (str "/games/" game-token "/actions")
                                          :session {:game-token game-token :game-player-id game-player-id}})
@@ -384,6 +388,11 @@
           (is (not (re-find #"game-screen" (:body hud-response))))
           (is (= 401 (:status unauthorized-hud-response)))
           (is (= 200 (:status dishes-response)))
+          (is (= 200 (:status htmx-dishes-response)))
+          (is (re-find #"screen--dishes" (:body htmx-dishes-response)))
+          (is (re-find #"id=\"game-nav\"" (:body htmx-dishes-response)))
+          (is (re-find #"hx-swap-oob=\"true\"" (:body htmx-dishes-response)))
+          (is (re-find #"game-nav__item is-active\" href=\"[^\"]*/dishes\"" (:body htmx-dishes-response)))
           (is (= 200 (:status actions-response)))
           (is (re-find #"Send Punks" (:body actions-response)))
           (is (= 200 (:status stats-response)))

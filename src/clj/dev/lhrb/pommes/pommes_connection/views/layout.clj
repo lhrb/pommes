@@ -58,20 +58,23 @@
    [:img {:src (str "/assets/icons/" icon "_48.png") :alt "" :width 32 :height 32}]
    [:span label]])
 
-(defn game-nav [game active]
-  [:nav.game-nav {:aria-label "Spielnavigation" :x-data "{more:false}"}
-   (map #(nav-link game active %) primary-nav)
-   [:button.game-nav__item {:type "button" "@click" "more = !more" :aria-label "Weitere Bereiche"}
-    [:img {:src "/assets/icons/nav_stats_48.png" :alt "" :width 32 :height 32}]
-    [:span "Mehr"]]
-   [:div.more-drawer {:x-show "more" :x-cloak true "@click.outside" "more=false"}
-    (for [{:keys [label icon path]} [{:label "Stadtwerte" :icon "nav_stats" :path "/stats"}
-                                    {:label "Chronik" :icon "nav_chronic" :path "/chronicle"}
-                                    {:label "Budenwissen" :icon "nav_wiki" :path "/wiki"}]]
-      [:a {:href (str "/games/" (:game-token game) path)
-           :hx-get (str "/games/" (:game-token game) path)
-           :hx-target "#game-screen" :hx-swap "outerHTML" :hx-push-url "true" "@click" "more=false"}
-       [:img {:src (str "/assets/icons/" icon "_48.png") :alt "" :width 32 :height 32}] label])]])
+(defn game-nav
+  ([game active] (game-nav game active false))
+  ([game active oob?]
+   [:nav.game-nav (cond-> {:id "game-nav" :aria-label "Spielnavigation" :x-data "{more:false}"}
+                    oob? (assoc :hx-swap-oob "true"))
+    (map #(nav-link game active %) primary-nav)
+    [:button.game-nav__item {:type "button" "@click" "more = !more" :aria-label "Weitere Bereiche"}
+     [:img {:src "/assets/icons/nav_stats_48.png" :alt "" :width 32 :height 32}]
+     [:span "Mehr"]]
+    [:div.more-drawer {:x-show "more" :x-cloak true "@click.outside" "more=false"}
+     (for [{:keys [label icon path]} [{:label "Stadtwerte" :icon "nav_stats" :path "/stats"}
+                                     {:label "Chronik" :icon "nav_chronic" :path "/chronicle"}
+                                     {:label "Budenwissen" :icon "nav_wiki" :path "/wiki"}]]
+       [:a {:href (str "/games/" (:game-token game) path)
+            :hx-get (str "/games/" (:game-token game) path)
+            :hx-target "#game-screen" :hx-swap "outerHTML" :hx-push-url "true" "@click" "more=false"}
+        [:img {:src (str "/assets/icons/" icon "_48.png") :alt "" :width 32 :height 32}] label])]]))
 
 (defn screen [active content]
   (into [:main {:id "game-screen" :class (str "game-screen screen--" (name active))}] content))
@@ -126,7 +129,7 @@
    (game-response title game viewer active content hx? (System/currentTimeMillis)))
   ([title game viewer active content hx? server-now]
    (if hx?
-     (str (h/html (screen active content) (resource-bar viewer true)))
+     (str (h/html (screen active content) (resource-bar viewer true) (game-nav game active true)))
      (page title (game-shell title game viewer active content server-now)))))
 
 (defn game-hud-response [game viewer server-now]
