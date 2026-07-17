@@ -82,10 +82,18 @@
    {:dish-count 3
     :starter
     {:interior :classic
-     :dishes [{:name "Classic pommes"
+     :dishes [{:name "Kleine Pommes"
                :pommes {:size :small :seasoning :salt}
-               :topping :ketchup
-               :price 4.0}]}}
+               :topping :ketchup-mayo
+               :price 4.0}
+              {:name "Große Pommes"
+               :pommes {:size :large :seasoning :salt}
+               :topping :ketchup-mayo
+               :price 6.0}
+              {:name "Pommes Special"
+               :pommes {:size :large :seasoning :salt}
+               :topping :special
+               :price 7.0}]}}
 
    :actions
    {:send-punks
