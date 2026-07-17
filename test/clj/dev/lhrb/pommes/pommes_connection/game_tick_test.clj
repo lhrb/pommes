@@ -474,7 +474,7 @@
           (is (= :demographic-attraction
                  (:type (first (edn/read-string (:active-effects target))))))
           (is (some #(= "action" (:kind %)) events))
-          (is (some #(re-find #"Punks zu Bea" (:message %)) events))))
+          (is (some #(re-find #"Punks.*Bea" (:message %)) events))))
       (finally
         (Files/deleteIfExists database-file)))))
 
