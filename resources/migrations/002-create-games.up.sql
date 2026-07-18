@@ -30,17 +30,6 @@ CREATE TABLE player_dishes (
 );
 --;;
 
-CREATE TABLE scheduled_actions (
-  id INTEGER PRIMARY KEY,
-  game_player_id INTEGER NOT NULL REFERENCES game_players(id) ON DELETE CASCADE,
-  kind TEXT NOT NULL,
-  payload TEXT NOT NULL,
-  apply_at_tick INTEGER NOT NULL CHECK (apply_at_tick > 0),
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE (game_player_id, kind, apply_at_tick)
-);
---;;
-
 CREATE TABLE game_ticks (
   id INTEGER PRIMARY KEY,
   game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
@@ -52,8 +41,5 @@ CREATE TABLE game_ticks (
 --;;
 
 CREATE INDEX player_dishes_game_player_id_idx ON player_dishes (game_player_id);
---;;
-CREATE INDEX scheduled_actions_game_player_tick_idx
-  ON scheduled_actions (game_player_id, apply_at_tick);
 --;;
 CREATE INDEX game_ticks_game_id_tick_idx ON game_ticks (game_id, tick);

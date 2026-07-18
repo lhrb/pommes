@@ -101,7 +101,6 @@
                        game-player-id
                        (overview datasource game-token game-player-id))]
       (game-view/page (assoc data
-                             :scheduled-for (get-in request [:params :scheduled-for])
                              :anti-forgery-token (:anti-forgery-token request)
                              :events (game-repository/load-game-events datasource (get-in data [:game :id]) 5 0)
                              :server-now (System/currentTimeMillis)
@@ -151,12 +150,13 @@
     (let [setup (select-keys (:viewer data) [:interior :dishes])]
       (dishes-view/page (assoc data
                                :forecast (forecast-for datasource data setup)
-                               :scheduled-for (get-in request [:params :scheduled-for])
+                               :notice (when (= "saved" (get-in request [:params :setup-result]))
+                                         "Menü gespeichert. Änderungen gelten ab dem nächsten Ansturm.")
                                :anti-forgery-token (:anti-forgery-token request)
                                :hx? (htmx? request))))
     (response/status (response/response "Log in to access this game.") 401)))
 
-(defn- schedule-setup [datasource request]
+(defn- save-setup [datasource request]
   (let [game-token (get-in request [:path-params :game-token])
         game-player-id (get-in request [:session :game-player-id])
         data (authorized-data datasource request)]
@@ -174,13 +174,15 @@
                                                    :anti-forgery-token (:anti-forgery-token request)
                                                    :hx? (htmx? request)))
                            400)
-          (let [apply-at-tick (game-repository/schedule-setup! datasource game-player-id setup)
-                fresh (authorized-data datasource request)]
+          (do
+            (game-repository/save-setup! datasource game-player-id setup)
+            (let [fresh (authorized-data datasource request)
+                  notice "Menü gespeichert. Änderungen gelten ab dem nächsten Ansturm."]
             (if (htmx? request)
               (dishes-view/page (assoc fresh :forecast (forecast-for datasource fresh setup)
-                                        :scheduled-for apply-at-tick :anti-forgery-token (:anti-forgery-token request) :hx? true))
+                                        :notice notice :anti-forgery-token (:anti-forgery-token request) :hx? true))
               (response/redirect (str "/games/" (game-repository/normalize-token game-token)
-                                      "/dishes?scheduled-for=" apply-at-tick)))))))))
+                                      "/dishes?setup-result=saved"))))))))))
 
 (defn- dish-impact [datasource request]
   (if-let [data (authorized-data datasource request)]
@@ -391,7 +393,7 @@
     ["/games/:game-token/dishes"
      {:get (fn [request] (dishes-page datasource request))}]
     ["/games/:game-token/dishes/setup"
-     {:post (fn [request] (schedule-setup datasource request))}]
+     {:post (fn [request] (save-setup datasource request))}]
     ["/games/:game-token/dishes/impact"
      {:post (fn [request] (dish-impact datasource request))}]
     ["/games/:game-token/actions"

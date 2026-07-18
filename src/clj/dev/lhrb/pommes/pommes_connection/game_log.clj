@@ -31,17 +31,16 @@
   [state event-key messages]
   (nth messages (Math/floorMod (hash [(:tick state) event-key]) (count messages))))
 
-(defn- action-events [state actions]
+(defn- action-events [state action-uses]
   (let [players (player-by-id state)]
-    (keep (fn [{:keys [id game-player-id kind payload]}]
-            (when (str/starts-with? (name kind) "action-")
-              (let [action (game-data/action (:action-id payload))
-                    actor (get players game-player-id)
-                    target (get players (:target-game-player-id payload))]
+    (keep (fn [{:keys [id actor-game-player-id target-game-player-id action-id]}]
+            (let [action (game-data/action (keyword action-id))
+                  actor (get players actor-game-player-id)
+                  target (get players target-game-player-id)]
                 {:kind :action
                  :message
                  (choose-message
-                  state [id (:action-id payload)]
+                  state [id action-id]
                   (case (:id action)
                     :send-punks
                     [(str (:name actor) " schickte Punks zu " (:name target)
@@ -92,8 +91,8 @@
                           "Am Ende waren alle versöhnt, bis auf den Mann mit der letzten Sitzbank.")]
 
                     [(str (:name actor) " löste bei " (:name target)
-                          " eine Angelegenheit aus, über die die Stadt vorerst nur hinter vorgehaltener Hand spricht.")]))})))
-          actions)))
+                          " eine Angelegenheit aus, über die die Stadt vorerst nur hinter vorgehaltener Hand spricht.")]))}))
+          action-uses)))
 
 (defn- audit-events [_before after]
   (keep (fn [player]

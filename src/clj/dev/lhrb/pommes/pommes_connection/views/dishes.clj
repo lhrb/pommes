@@ -150,13 +150,13 @@
                 [:span.market-donut__swatch {:style (str "background:" color)}]
                 [:span label] [:strong (quantity sales)]])]])]]])))
 
-(defn page [{:keys [game viewer players city latest-tick form errors scheduled-for anti-forgery-token forecast hx?]}]
+(defn page [{:keys [game viewer players city latest-tick form errors notice anti-forgery-token forecast hx?]}]
   (let [options (setup-options)
         dishes (take (:dish-count options) (concat (or (:dishes form) (:dishes viewer)) (repeat {})))]
     (-> (layout/game-response
          (str "Gerichte & Markt | " (:name game)) game viewer :dishes
          [[:header.screen-head (layout/icon "nav_dishes" "") [:div [:h1 "Gerichte & Markt"] [:p "Die Karte entscheidet, wer stehen bleibt."]]]
-          (when scheduled-for (layout/notice "good" (str "Menüänderungen sind für Tick " scheduled-for " notiert.")))
+          (when notice (layout/notice "good" notice))
           (latest-market-panel {:city city :players players :latest-tick latest-tick})
           [:section {:id "menu-editor" :class "panel panel--yellow"}
                          [:h2 "Morgenkarte drucken"]
@@ -190,7 +190,7 @@
                           [:div {:id "market-impact"} (impact-panel forecast)]
                           (layout/button {:type "button" :hx-post (str "/games/" (:game-token game) "/dishes/setup")
                                           :hx-include "#menu-form" :hx-target "#game-screen" :hx-swap "outerHTML"}
-                                         "Für den nächsten Tick eintragen")]]]
+                                         "Karte speichern")]]]
          hx?)
         response/response
         (response/content-type "text/html; charset=utf-8"))))

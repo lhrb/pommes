@@ -1,6 +1,5 @@
 (ns dev.lhrb.pommes.pommes-connection.game-tick
   (:require
-   [clojure.string :as str]
    [dev.lhrb.pommes.pommes-connection.game-repository :as game-repository]
    [dev.lhrb.pommes.pommes-connection.game-log :as game-log]
    [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
@@ -14,46 +13,23 @@
   [simulation-config]
   (* 1000 (get-in simulation-config [:rules :tick-seconds])))
 
-(defn- setup-dishes
-  [dishes]
-  (mapv (fn [index dish]
-          (assoc dish :id (or (:id dish) (str "setup-dish-" index))))
-        (range)
-        dishes))
-
-(defn- apply-action
-  [state {:keys [game-player-id kind payload]}]
-  (cond
-    (= kind :setup)
+(defn- apply-action-use
+  [state {:keys [id target-game-player-id action-id]}]
+  (let [action (game-data/action (keyword action-id))]
+    (when-not action
+      (throw (ex-info "Unknown game action" {:action-id action-id})))
     (update state :players
             (fn [players]
               (mapv (fn [player]
-                      (if (= game-player-id (:id player))
-                        (-> player
-                            (assoc :interior (:interior payload))
-                            (assoc :dishes (setup-dishes (:dishes payload))))
+                      (if (= target-game-player-id (:id player))
+                        (update player :effects into
+                                (mapv #(assoc %
+                                              :ticks-left (:duration action)
+                                              :action-id (:id action)
+                                              :action-use-id id)
+                                      (:effects action)))
                         player))
-                    players)))
-
-    (str/starts-with? (name kind) "action-")
-    (let [action (game-data/action (:action-id payload))]
-      (when-not action
-        (throw (ex-info "Unknown game action" {:action-id (:action-id payload)})))
-      (update state :players
-              (fn [players]
-                (mapv (fn [player]
-                        (if (= (:target-game-player-id payload) (:id player))
-                          (update player :effects into
-                                  (mapv #(assoc %
-                                                :ticks-left (:duration action)
-                                                :action-id (:id action)
-                                                :action-use-id (:action-use-id payload))
-                                        (:effects action)))
-                          player))
-                      players))))
-
-    :else
-    (throw (ex-info "Unknown scheduled action" {:kind kind}))))
+                    players)))))
 
 (defn- tick-summary
   [state]
@@ -90,14 +66,14 @@
    (jdbc/with-transaction [tx datasource]
      (game-repository/enable-foreign-keys! tx)
      (let [state (game-repository/load-game-state tx game-id simulation-config)
-           actions (game-repository/load-actions tx game-id (inc (:tick state)))
-           state-with-actions (reduce apply-action state actions)
+           action-uses (game-repository/load-due-action-uses tx game-id (inc (:tick state)))
+           state-with-actions (reduce apply-action-use state action-uses)
            updated-state (assoc (simulation/simulate-tick state-with-actions)
                                 :next-tick-at (+ (:next-tick-at state)
                                                  (tick-millis simulation-config)))
            summary (tick-summary updated-state)
-           events (game-log/events state updated-state actions)]
-       (game-repository/persist-tick! tx updated-state (mapv :id actions) summary events)
+           events (game-log/events state updated-state action-uses)]
+       (game-repository/persist-tick! tx updated-state summary events)
        summary))))
 
 (defn run-due-ticks!

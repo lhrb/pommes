@@ -245,7 +245,7 @@
       (finally
         (Files/deleteIfExists database-file)))))
 
-(deftest queued-setup-is-applied-by-a-persisted-tick
+(deftest saved-setup-is-used-by-the-next-persisted-tick
   (let [database-file (Files/createTempFile "pommes-connection-" ".db"
                                              (make-array java.nio.file.attribute.FileAttribute 0))
         datasource (jdbc/get-datasource (str "jdbc:sqlite:" database-file))]
@@ -268,20 +268,28 @@
                                         :pommes {:size :small :seasoning :salt}
                                         :topping :ketchup
                                         :price 4.0}]})]
-        (game-repository/schedule-setup!
+        (game-repository/save-setup!
          datasource game-player-id
          {:interior :cozy
           :dishes [{:name "Cozy special"
                     :pommes {:size :small :seasoning :salt}
                     :topping :ketchup
                     :price 5.0}]})
-        (game-repository/schedule-setup!
+        (game-repository/save-setup!
          datasource game-player-id
          {:interior :cozy
           :dishes [{:name "Cozy special"
                     :pommes {:size :small :seasoning :salt}
                     :topping :ketchup
                     :price 5.5}]})
+        (is (= "cozy"
+               (:interior (jdbc/execute-one! datasource
+                                              ["SELECT interior FROM game_players WHERE id = ?" game-player-id]
+                                              query-options))))
+        (is (= 5.5
+               (:price (jdbc/execute-one! datasource
+                                           ["SELECT price FROM player_dishes WHERE game_player_id = ?" game-player-id]
+                                           query-options))))
         (game-tick/run-next-tick! datasource game-id simulation-config)
         (let [game (jdbc/execute-one! datasource ["SELECT tick, city_state FROM games WHERE id = ?" game-id]
                                       query-options)
@@ -292,8 +300,9 @@
                                       ["SELECT name, price FROM player_dishes WHERE game_player_id = ?"
                                        game-player-id]
                                       query-options)
-              queued (jdbc/execute-one! datasource ["SELECT count(*) AS count FROM scheduled_actions"]
-                                         query-options)
+              scheduled-actions-table (jdbc/execute-one! datasource
+                                                         ["SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'scheduled_actions'"]
+                                                         query-options)
               history (jdbc/execute-one! datasource
                                           ["SELECT tick, summary FROM game_ticks WHERE game_id = ?" game-id]
                                           query-options)
@@ -359,7 +368,7 @@
           (is (= "cozy" (:interior player)))
           (is (= "Cozy special" (:name dish)))
           (is (= 5.5 (:price dish)))
-          (is (zero? (:count queued)))
+          (is (nil? scheduled-actions-table))
           (is (= 1 (:tick history)))
           (is (number? (get-in overview [:game :next-tick-at])))
           (is (= game-player-id
@@ -395,7 +404,7 @@
           (is (re-find #"hx-swap-oob=\"true\"" (:body htmx-dishes-response)))
           (is (re-find #"game-nav__item is-active\" href=\"[^\"]*/dishes\"" (:body htmx-dishes-response)))
           (is (= 200 (:status actions-response)))
-          (is (re-find #"Send Punks" (:body actions-response)))
+          (is (re-find #"Die Punks kommen" (:body actions-response)))
           (is (= 200 (:status stats-response)))
           (is (re-find #"Stadtstatistik" (:body stats-response)))
           (is (re-find #"Marktanteile" (:body stats-response)))
@@ -411,7 +420,7 @@
           (is (= 400 (:status invalid-setup-response)))
           (is (re-find #"Name is required" (:body invalid-setup-response)))
           (is (= 302 (:status setup-response)))
-          (is (= (str "/games/" game-token "/dishes?scheduled-for=2")
+          (is (= (str "/games/" game-token "/dishes?setup-result=saved")
                  (get-in setup-response [:headers "Location"])))))
       (finally
         (Files/deleteIfExists database-file)))))
@@ -600,7 +609,7 @@
         (is (= 200 (get-in dishes-page [:response :status])))
         (is (seq setup-token))
         (is (= 302 (get-in setup-response [:response :status])))
-        (is (re-find #"/dishes[?]scheduled-for=1$"
+        (is (re-find #"/dishes[?]setup-result=saved$"
                      (get-in setup-response [:response :headers "Location"]))))
       (finally
         (Files/deleteIfExists database-file)))))

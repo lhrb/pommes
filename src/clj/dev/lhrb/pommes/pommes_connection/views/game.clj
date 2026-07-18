@@ -27,9 +27,8 @@
   [:img.demographic-icon {:src (str "/assets/icons/" (get demographic-icons id "dem_foodie") "_48.png")
                           :alt alt :width 32 :height 32}])
 
-(defn- city-notice [viewer-result scheduled-for]
+(defn- city-notice [viewer-result]
   (cond
-    scheduled-for ["good" (str "Die neue Karte liegt für den nächsten Ansturm bereit. Die Straße wird urteilen, sobald sie Zeit hat.")]
     (nil? viewer-result) ["quiet" "Vor der Bude ist es still. Das ist kein Frieden, nur die Zeit vor einer Bestellung."]
     (pos? (:profit viewer-result)) ["good" "Die Kasse hat sich bewegt. Nun muss entschieden werden, ob das Methode oder ein bedauerlicher Zufall war."]
     :else ["warning" "Der letzte Ansturm war gegen die Kasse. Die Karte verlangt nach einer sachlichen Korrektur."]))
@@ -171,14 +170,14 @@
     (navigation-link game "/chronicle" "Chronik aufschlagen")]))
 
 (defn page
-  [{:keys [game viewer players city latest-tick scheduled-for events hx? server-now]}]
+  [{:keys [game viewer players city latest-tick events hx? server-now]}]
   (let [viewer-result (viewer-tick-summary latest-tick (:id viewer))
         dishes (when latest-tick (best-selling-dishes players latest-tick (:id viewer)))]
     (-> (layout/game-response
          (str (:name game) " | Pommes Connection") game viewer :game
          [[:header.screen-head
            [:div [:h1 "Budenlage"] [:p (:name viewer) " hält die Schicht zusammen."]]]
-          (let [[kind message] (city-notice viewer-result scheduled-for)]
+          (let [[kind message] (city-notice viewer-result)]
             (layout/notice kind message))
           (action-panel game viewer-result)
           (layout/panel "panel--yellow"

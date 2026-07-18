@@ -15,3 +15,6 @@ CREATE INDEX game_action_uses_actor_action_tick_idx
 --;;
 CREATE INDEX game_action_uses_target_idx
   ON game_action_uses (target_game_player_id);
+--;;
+CREATE INDEX game_action_uses_game_apply_tick_idx
+  ON game_action_uses (game_id, apply_at_tick, id);

@@ -357,30 +357,32 @@
                       (normalize-token game-token)]
                      query-options))
 
-(defn schedule-setup!
+(defn save-setup!
   [datasource game-player-id setup]
   (jdbc/with-transaction [tx datasource]
     (enable-foreign-keys! tx)
-    (let [game (jdbc/execute-one! tx
-                                  ["SELECT games.tick
-                                    FROM games
-                                    JOIN game_players ON game_players.game_id = games.id
-                                    WHERE game_players.id = ?"
-                                   game-player-id]
-                                  query-options)]
-      (when-not game
+    (let [player (jdbc/execute-one! tx
+                                    ["SELECT id FROM game_players WHERE id = ?" game-player-id]
+                                    query-options)]
+      (when-not player
         (throw (ex-info "Game player does not exist" {:game-player-id game-player-id})))
-      (let [apply-at-tick (inc (:tick game))]
+      (jdbc/execute-one! tx
+                         ["UPDATE game_players SET interior = ? WHERE id = ?"
+                          (name (:interior setup)) game-player-id]
+                         query-options)
+      (jdbc/execute-one! tx
+                         ["DELETE FROM player_dishes WHERE game_player_id = ?" game-player-id]
+                         query-options)
+      (doseq [dish (:dishes setup)]
         (jdbc/execute-one! tx
-                           ["INSERT INTO scheduled_actions
-                             (game_player_id, kind, payload, apply_at_tick)
-                             VALUES (?, 'setup', ?, ?)
-                             ON CONFLICT (game_player_id, kind, apply_at_tick)
-                             DO UPDATE SET payload = excluded.payload,
-                                           created_at = CURRENT_TIMESTAMP"
-                            game-player-id (encode setup) apply-at-tick]
-                           query-options)
-        apply-at-tick))))
+                           ["INSERT INTO player_dishes
+                             (game_player_id, name, size, seasoning, topping, price)
+                             VALUES (?, ?, ?, ?, ?, ?)"
+                            game-player-id (:name dish)
+                            (name (get-in dish [:pommes :size]))
+                            (name (get-in dish [:pommes :seasoning]))
+                            (name (:topping dish)) (double (:price dish))]
+                           query-options)))))
 
 (defn action-cost
   [action last-revenue money]
@@ -595,48 +597,26 @@
                                                    query-options)]
               (if (zero? (long (or (:next.jdbc/update-count update-result) 0)))
                 {:error :insufficient-funds :cost cost}
-                (let [action-use-id
-                      (:id (jdbc/execute-one! tx
-                                              ["INSERT INTO game_action_uses
-                                                (game_id, actor_game_player_id, target_game_player_id,
-                                                 action_id, cost, purchase_tick, apply_at_tick)
-                                                VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id"
-                                               (:game-id actor) actor-game-player-id target-game-player-id
-                                               (name action-id) cost tick apply-at-tick]
-                                              query-options))]
+                (do
                   (jdbc/execute-one! tx
-                                     ["INSERT INTO scheduled_actions
-                                       (game_player_id, kind, payload, apply_at_tick)
-                                       VALUES (?, ?, ?, ?)"
-                                      actor-game-player-id
-                                      (str "action-" (name action-id))
-                                      (encode {:action-id action-id
-                                               :target-game-player-id target-game-player-id
-                                               :action-use-id action-use-id})
-                                      apply-at-tick]
+                                     ["INSERT INTO game_action_uses
+                                       (game_id, actor_game_player_id, target_game_player_id,
+                                        action_id, cost, purchase_tick, apply_at_tick)
+                                       VALUES (?, ?, ?, ?, ?, ?, ?)"
+                                      (:game-id actor) actor-game-player-id target-game-player-id
+                                      (name action-id) cost tick apply-at-tick]
                                      query-options)
                   {:ok true :cost cost :apply-at-tick apply-at-tick})))))))))
 
-(defn load-actions
+(defn load-due-action-uses
   [connectable game-id apply-at-tick]
-  (mapv (fn [row]
-          {:id (:id row)
-           :game-player-id (:game-player-id row)
-           :kind (keyword (:kind row))
-           :payload (decode (:payload row))})
-        (jdbc/execute! connectable
-                       ["SELECT scheduled_actions.id,
-                                scheduled_actions.game_player_id,
-                                scheduled_actions.kind,
-                                scheduled_actions.payload
-                         FROM scheduled_actions
-                         JOIN game_players
-                           ON game_players.id = scheduled_actions.game_player_id
-                         WHERE game_players.game_id = ?
-                           AND scheduled_actions.apply_at_tick = ?
-                         ORDER BY scheduled_actions.id"
-                        game-id apply-at-tick]
-                       query-options)))
+  (jdbc/execute! connectable
+                 ["SELECT id, actor_game_player_id, target_game_player_id, action_id
+                   FROM game_action_uses
+                   WHERE game_id = ? AND apply_at_tick = ?
+                   ORDER BY id"
+                  game-id apply-at-tick]
+                 query-options))
 
 (defn due-game-ids
   [connectable now]
@@ -657,7 +637,7 @@
                       query-options)))
 
 (defn persist-tick!
-  [connectable state action-ids summary events]
+  [connectable state summary events]
   (jdbc/execute-one! connectable
                      ["UPDATE games SET tick = ?, market_state = ?, city_state = ?, next_tick_at = ? WHERE id = ?"
                       (:tick state) (encode (:market state)) (encode (:city state))
@@ -699,10 +679,6 @@
                         (name (get-in dish [:pommes :seasoning]))
                         (name (:topping dish)) (double (:price dish))]
                        query-options))
-  (doseq [action-id action-ids]
-    (jdbc/execute-one! connectable
-                       ["DELETE FROM scheduled_actions WHERE id = ?" action-id]
-                       query-options))
   (jdbc/execute-one! connectable
                      ["INSERT INTO game_ticks (game_id, tick, summary) VALUES (?, ?, ?)"
                       (:game-id state) (:tick state) (encode summary)])
@@ -713,7 +689,7 @@
                        query-options)))
 
 (comment
-  ;; (schedule-setup! datasource game-player-id {:interior :cozy :dishes [...]})
+  ;; (save-setup! datasource game-player-id {:interior :cozy :dishes [...]})
 
   ;; Action costs use the highest of the €20 minimum, revenue share, and cash share.
   (action-cost (game-data/action :send-punks) 0.0 0.0)
