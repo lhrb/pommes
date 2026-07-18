@@ -76,6 +76,7 @@
             :suspicion (:suspicion last-tick)
             :audited? (:audited? last-tick)
             :audit-penalty-ticks (:audit-penalty-ticks last-tick)
+            :dish-sales (:dish-sales last-tick)
             :demographic-sales (:demographic-sales last-tick)
             :money money
             :prestige prestige

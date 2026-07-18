@@ -369,6 +369,7 @@
                  (get-in overview [:latest-tick :players 0 :demographic-sales])))
           (is (= (get-in overview [:latest-tick :players 0 :demographic-sales])
                  (get-in (edn/read-string (:game-stats game-stats)) [:demographic-sales])))
+          (is (map? (get-in overview [:latest-tick :players 0 :dish-sales])))
           (is (number? (get-in overview [:latest-tick :demographic-unserved-demand :locals])))
           (is (= "Ada" (get-in overview [:players 0 :name])))
           (is (= "Cozy special" (get-in overview [:viewer :dishes 0 :name])))

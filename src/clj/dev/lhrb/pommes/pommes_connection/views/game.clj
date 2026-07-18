@@ -4,6 +4,16 @@
    [dev.lhrb.pommes.pommes-connection.views.layout :as layout]
    [ring.util.response :as response]))
 
+(def demographic-icons
+  {:students "dem_student"
+   :families "dem_families"
+   :yuppies "dem_yuppi"
+   :office-workers "dem_worker"
+   :retirees "dem_retiree"
+   :foodies "dem_foodie"})
+
+(def chart-colors ["#f5464c" "#4995f3" "#3ec54b" "#f09548" "#b22741" "#72deeb" "#b4e656" "#3c2f52"])
+
 (defn- money [value]
   (str "€" (str/replace (format "%.2f" (double (or value 0.0))) "." ",")))
 
@@ -13,20 +23,137 @@
 (defn- viewer-tick-summary [latest-tick viewer-id]
   (some #(when (= viewer-id (:player-id %)) %) (:players latest-tick)))
 
-(defn- city-notice [game viewer-result scheduled-for]
-  (cond
-    scheduled-for ["good" (str "Menüänderungen sind für Tick " scheduled-for " notiert. Die Nachbarschaft spitzt die Ohren.")]
-    (nil? viewer-result) ["quiet" "Verdächtig ruhig. Der erste Mittagsmob ist noch nicht eingerollt."]
-    (pos? (:profit viewer-result)) ["good" "Eilmeldung vom Mittagstisch: Deine Bude hat Gewinn gemacht."]
-    :else ["warning" "Merkwürdige Kritik im Lokalblatt: Beim nächsten Ansturm lieber auf die Marge schielen."]))
+(defn- demographic-icon [id alt]
+  [:img.demographic-icon {:src (str "/assets/icons/" (get demographic-icons id "dem_foodie") "_48.png")
+                          :alt alt :width 32 :height 32}])
 
-(defn- player-card [player viewer]
-  (layout/offer-card
-   [[:div.offer-card__top
-     [:strong (:name player)]
-     (when (= (:id player) (:id viewer)) (layout/badge "Du"))]
-    [:div.stat-row [:span "Buden-Kasse"] [:strong (money (:money player))]]
-    [:div.stat-row [:span "Prestige"] [:strong (quantity (:prestige player))]]]))
+(defn- city-notice [viewer-result scheduled-for]
+  (cond
+    scheduled-for ["good" (str "Die neue Karte liegt für den nächsten Ansturm bereit. Die Straße wird urteilen, sobald sie Zeit hat.")]
+    (nil? viewer-result) ["quiet" "Vor der Bude ist es still. Das ist kein Frieden, nur die Zeit vor einer Bestellung."]
+    (pos? (:profit viewer-result)) ["good" "Die Kasse hat sich bewegt. Nun muss entschieden werden, ob das Methode oder ein bedauerlicher Zufall war."]
+    :else ["warning" "Der letzte Ansturm war gegen die Kasse. Die Karte verlangt nach einer sachlichen Korrektur."]))
+
+(defn- navigation-link [game path label]
+  [:a.button {:href (str "/games/" (:game-token game) path)
+              :hx-get (str "/games/" (:game-token game) path)
+              :hx-target "#game-screen" :hx-swap "outerHTML" :hx-push-url "true"}
+   label])
+
+(defn- action-panel [game viewer-result]
+  (let [[path title copy label]
+        (if (or (nil? viewer-result) (not (pos? (:profit viewer-result))))
+          ["/dishes" "Die Karte duldet keinen Aufschub"
+           "Die nächste Portion wird nach deiner Entscheidung verkauft. Oder nicht verkauft, was ebenfalls eine Entscheidung wäre."
+           "Karte ändern"]
+          ["/actions" "Die Straße ist in Bewegung"
+           "Der Betrieb läuft. Das ist der Augenblick, in dem andere Buden unvorsichtig werden könnten."
+           "Aktionen prüfen"])]
+    (layout/panel "panel--yellow action-prompt"
+                  [[:h2 title]
+                   [:p copy]
+                   (navigation-link game path label)])))
+
+(defn- winner [entries]
+  (when-let [best (first (sort-by (juxt (comp - :sales) :player-id :dish-id) entries))]
+    (when (pos? (:sales best)) best)))
+
+(defn- dish-by-id [player dish-id]
+  (some #(when (= (str dish-id) (str (:id %))) %) (:dishes player)))
+
+(defn- best-selling-dishes [players latest-tick viewer-id]
+  (let [players-by-id (into {} (map (juxt :id identity) players))
+        entries (mapcat (fn [{:keys [player-id dish-sales]}]
+                          (for [[dish-id sales] dish-sales]
+                            {:player-id player-id :dish-id dish-id :sales sales}))
+                        (:players latest-tick))
+        decorate (fn [entry]
+                   (let [player (get players-by-id (:player-id entry))
+                         dish (dish-by-id player (:dish-id entry))]
+                     (assoc entry :player-name (:name player) :dish-name (:name dish))))]
+    {:own (some->> entries (filter #(= viewer-id (:player-id %))) winner decorate)
+     :town (some-> entries winner decorate)}))
+
+(defn- dish-result [label result include-player?]
+  [:div.dish-result
+   [:span label]
+   (if result
+     [:strong (str (:dish-name result) (when include-player? (str " · " (:player-name result))))]
+     [:strong "Noch ohne Urteil"])
+   (when result [:small (str (quantity (:sales result)) " Portionen")])])
+
+(defn- donut-slices [entries]
+  (let [total (reduce + 0 (map :population entries))]
+    (when (pos? total)
+      (second
+       (reduce (fn [[offset slices] entry]
+                 (let [size (* 100.0 (/ (double (:population entry)) total))]
+                   [(+ offset size) (conj slices (assoc entry :offset offset :size size))]))
+               [0.0 []]
+               entries)))))
+
+(defn- demographic-donut [city]
+  (let [entries (:demographics city)
+        slices (donut-slices entries)
+        total (reduce + 0 (map :population entries))]
+    (layout/panel
+     "panel--tight city-demographics"
+     [[:h2 "Wer heute in der Stadt ist"]
+      [:p.meta "Die Gruppen verteilen sich, als hätten sie es untereinander abgesprochen."]
+      (if (pos? total)
+        [:div.city-demographics__body
+         [:svg.city-donut {:viewBox "0 0 120 120" :role "img"
+                           :aria-label "Anteile der Kundengruppen in der Stadt"}
+          [:title "Anteile der Kundengruppen in der Stadt"]
+          [:circle.city-donut__track {:cx 60 :cy 60 :r 46}]
+          (map-indexed
+           (fn [index {:keys [offset size]}]
+             [:circle.city-donut__slice {:cx 60 :cy 60 :r 46 :pathLength 100
+                                         :stroke (nth chart-colors (mod index (count chart-colors)))
+                                         :stroke-dasharray (str size " " (- 100.0 size))
+                                         :stroke-dashoffset (- offset)}])
+           slices)]
+         [:ul.city-demographics__legend
+          (map-indexed (fn [index {:keys [id population]}]
+                         [:li
+                          [:span.city-demographics__swatch {:style (str "background:" (nth chart-colors (mod index (count chart-colors))))}]
+                          (demographic-icon id (str (name id) ": " (quantity population)))
+                          [:strong (quantity population)]])
+                       entries)]]
+        [:p.meta "Die Stadt zählt noch nach. Niemand möchte die Verantwortung für die letzte Zahl übernehmen."])])))
+
+(defn- profit-chart [players latest-tick]
+  (let [latest-by-player (into {} (map (juxt :player-id identity) (:players latest-tick)))
+        entries (->> players
+                     (map (fn [player]
+                            {:id (:id player) :name (:name player)
+                             :profit (double (get-in latest-by-player [(:id player) :profit] 0.0))}))
+                     (sort-by (juxt (comp - :profit) :name))
+                     vec)
+        maximum (apply max 0.0 (map :profit entries))
+        minimum (apply min 0.0 (map :profit entries))
+        range-value (max 1.0 (- maximum minimum))
+        zero-x (+ 16 (* 168 (/ (- 0.0 minimum) range-value)))]
+    (layout/panel
+     "panel--tight profit-chart"
+     [[:h2 "Gewinnlage der Buden"]
+      [:p.meta "Der letzte Ansturm wurde abgerechnet. Die Beträge sind nicht verhandelbar, nur ihre Deutung."]
+      (if (seq entries)
+        [:div.profit-chart__rows
+         (map-indexed
+          (fn [index {:keys [name profit]}]
+            (let [value-x (+ 16 (* 168 (/ (- profit minimum) range-value)))
+                  left (min zero-x value-x)
+                  width (max 1 (Math/abs (- value-x zero-x)))]
+              [:div {:class (str "profit-chart__row" (when (zero? index) " profit-chart__row--leader"))}
+               [:span.profit-chart__name name]
+               [:svg {:viewBox "0 0 200 28" :role "img" :aria-label (str name ": " (money profit) " Gewinn")}
+                [:line.profit-chart__zero {:x1 zero-x :x2 zero-x :y1 2 :y2 26}]
+                [:rect {:x left :y 5 :width width :height 18
+                        :fill (nth chart-colors (mod index (count chart-colors)))}]]
+               [:strong (money profit)]]))
+          entries)]
+        [:p.meta "Noch keine Bude hat einen Ansturm abgerechnet."])])))
 
 (defn- chronicle-panel [game events]
   (layout/panel
@@ -40,44 +167,47 @@
          [:li {:style "margin:0 0 10px"}
           [:strong (str "Tick " tick ": ")]
           message])]
-      [:p.meta "Noch schreibt die Stadt an ihrer ersten Schlagzeile."])
-    [:a.button {:href (str "/games/" (:game-token game) "/chronicle")}
-     "Ganze Chronik lesen"]]))
+      [:p.meta "Noch fehlt der Stadt ein Vorfall, den sie mit ausreichender Gewissheit falsch erzählen kann."])
+    (navigation-link game "/chronicle" "Chronik aufschlagen")]))
 
 (defn page
-  [{:keys [game viewer players latest-tick scheduled-for events hx? server-now]}]
-  (let [viewer-result (viewer-tick-summary latest-tick (:id viewer))]
+  [{:keys [game viewer players city latest-tick scheduled-for events hx? server-now]}]
+  (let [viewer-result (viewer-tick-summary latest-tick (:id viewer))
+        dishes (when latest-tick (best-selling-dishes players latest-tick (:id viewer)))]
     (-> (layout/game-response
          (str (:name game) " | Pommes Connection") game viewer :game
          [[:header.screen-head
-           (layout/icon "nav_game" "")
-           [:div [:h1 "Deine Bude"] [:p (:name viewer) " · Tick " (:tick game)]]]
-          (let [[kind message] (city-notice game viewer-result scheduled-for)]
+           [:div [:h1 "Budenlage"] [:p (:name viewer) " hält die Schicht zusammen."]]]
+          (let [[kind message] (city-notice viewer-result scheduled-for)]
             (layout/notice kind message))
+          (action-panel game viewer-result)
           (layout/panel "panel--yellow"
                         [[:div.offer-card__top
                           [:h2 "Budenbericht"]
-                          (layout/badge "Heute")]
+                          (layout/badge "Letzter Ansturm")]
                          (if viewer-result
-                           [:div.grid.grid--three
-                            (layout/stat-row "Verkäufe" (quantity (:sales viewer-result)))
-                            (layout/stat-row "Gewinn" (money (:profit viewer-result)))
-                            (layout/stat-row "Kasse" (money (:money viewer-result)))]
-                           [:p "Noch keine Einnahmen. Bau ein Menü, bevor der erste Mob auftaucht."])])
-          (chronicle-panel game events)
-          (when viewer-result
-            (layout/panel "panel--tight"
-                          [[:h2 (str "Quittung für Tick " (:tick latest-tick))]
                            [:div.grid.grid--two
+                            (layout/stat-row "Verkäufe" (quantity (:sales viewer-result)))
                             (layout/stat-row "Umsatz" (money (:revenue viewer-result)))
-                            (layout/stat-row "Prestige" (quantity (:prestige viewer-result)))]
-                           ]))
+                            (layout/stat-row "Gewinn" (money (:profit viewer-result)))
+                            (layout/stat-row "Kasse" (money (:money viewer-result)))
+                            (dish-result "Dein meistverkauftes Gericht" (:own dishes) false)]
+                           [:p "Die Fritteuse wartet auf ihren ersten Bericht. Eine Karte wäre ein Anfang, auch wenn die Stadt das nicht so nennen würde."])])
+          (when latest-tick
+            (layout/panel "panel--quiet market-summary"
+                          [[:h2 "Was die Stadt bestellt"]
+                           [:p.meta "Ein Gericht hat sich im letzten Ansturm durchgesetzt. Die Gründe liegen bei der Kundschaft und sind deshalb nicht zuverlässig zu ermitteln."]
+                           (dish-result "Meistverkauft in der Stadt" (:town dishes) true)]))
+          (demographic-donut city)
+          (when latest-tick (profit-chart players latest-tick))
+          (chronicle-panel game events)
           (layout/panel "panel--quiet"
                         [[:h2 "Pinnwand"]
-                         [:p.invite "Einladungslink · weitere Fritteuse gesucht: "
+                         [:p "Ein weiterer Betreiber wird gesucht. Die Stadt behauptet, sie brauche Auswahl; vermutlich braucht sie Gesprächsstoff."]
+                         [:p.invite "Einladungslink: "
                           [:a {:href (str "/join/" (:invite-token game))}
-                           (str "/join/" (:invite-token game))]]])
-          ] hx? server-now)
+                           (str "/join/" (:invite-token game))]]])]
+         hx? server-now)
         response/response
         (response/content-type "text/html; charset=utf-8"))))
 
@@ -110,6 +240,7 @@
         (response/content-type "text/html; charset=utf-8"))))
 
 (comment
-  ;; (page {:game {:id 1 :name "Lunch rush" :tick 0} :viewer {:id 1 :name "Ada"}})
+  ;; (page {:game {:name "Lunch" :game-token "ABC123"} :viewer {:id 1 :name "Ada"}
+  ;;        :players [] :city {:demographics []}})
   ;; (chronicle-page {:game {:name "Lunch" :game-token "ABC123"} :events [] :page 0 :page-count 0})
   )

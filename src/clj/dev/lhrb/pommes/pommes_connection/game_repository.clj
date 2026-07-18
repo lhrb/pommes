@@ -309,7 +309,8 @@
                            :effects (decode (:active-effects player))
                            :game-stats (decode (:game-stats player))
                            :regulars (load-regulars connectable (:id player))
-                           :research (load-research connectable (:id player))})
+                           :research (load-research connectable (:id player))
+                           :dishes (load-dishes connectable (:id player))})
                         players)
          :city (if-let [city-state (:city-state game)]
                  (decode city-state)

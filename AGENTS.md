@@ -9,6 +9,8 @@ Clojure.
 - Keep it simple, robust and minimal
 - Prefer explicit data and pure functions.
 - Keep abstractions minimal and easy to debug.
+- code should be easy to reason about
+- code should be easy to comprehend for humans
 - Use Kit for application lifecycle and web plumbing.
 - Use Ring and Reitit for HTTP routing.
 - Use Hiccup for server-rendered HTML.
