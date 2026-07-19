@@ -46,7 +46,7 @@
 (defn- dish-field [options index dish errors]
   (let [prefix (str "dish-" index "-") catalog (:catalog options)]
     [:fieldset {:data-dish true}
-     [:legend (str "Gericht " index)]
+     [:legend "Gericht " (layout/number index)]
      [:div.grid
       [:label {:for (str prefix "name")} "Name"
        [:input {:name (str prefix "name") :id (str prefix "name") :required true :value (or (:name dish) "")}]]
@@ -147,7 +147,7 @@
              (for [{:keys [id label sales color]} entries]
                [:li {:key id}
                 [:span.market-donut__swatch {:style (str "background:" color)}]
-                [:span label] [:strong (quantity sales)]])]])]]])))
+                [:span label] [:strong (layout/number (quantity sales))]])]])]]])))
 
 (defn page [{:keys [game viewer players city latest-tick form errors notice active-dish anti-forgery-token forecast hx?]}]
   (let [options (setup-options)
@@ -183,7 +183,7 @@
                               [:label {:for (str "dish-tab-" index)
                                        :aria-controls (str "dish-panel-" index)
                                        :aria-checked (= active-dish index)}
-                               (str "Gericht " index)])]
+                               "Gericht " (layout/number index)])]
                            [:div.menu-tab__panels
                             (map-indexed (fn [index dish]
                                            [:div.menu-tab__panel {:id (str "dish-panel-" (inc index))

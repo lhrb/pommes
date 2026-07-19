@@ -15,6 +15,8 @@
 
 (defn badge [label] [:span.badge label])
 
+(defn number [value] [:span.number value])
+
 (defn notice [kind content]
   [:div {:class (str "notice notice--" kind) :role (if (= kind "error") "alert" "status")}
    content])
@@ -36,12 +38,12 @@
   [:section (cond-> {:id "resource-bar" :class "resource-bar" :aria-label "Deine Werte"}
               oob? (assoc :hx-swap-oob "true"))
    [:div.resource [:img.icon {:src "/assets/icons/res_money_48.png" :alt "" :width 32 :height 32}]
-    [:span "Kasse"] [:strong {:data-flash-value true} (money (:money viewer))]]
+    [:span "Kasse"] [:strong {:data-flash-value true} (number (money (:money viewer)))]]
    [:div.resource [:img.icon {:src "/assets/icons/res_pommes_48.png" :alt "" :width 32 :height 32}]
     [:span "Portionen"] [:strong {:data-flash-value true}
-     (long (reduce + 0 (vals (get-in viewer [:game-stats :demographic-sales] {}))))]]
+     (number (long (reduce + 0 (vals (get-in viewer [:game-stats :demographic-sales] {})))))]]
    [:div.resource [:img.icon {:src "/assets/icons/res_prestige_48.png" :alt "" :width 32 :height 32}]
-    [:span "Prestige"] [:strong {:data-flash-value true} (long (or (:prestige viewer) 0))]]])
+    [:span "Prestige"] [:strong {:data-flash-value true} (number (long (or (:prestige viewer) 0)))]]])
 
 (def primary-nav
   [{:id :game :label "Bude" :icon "nav_game" :path ""}
@@ -101,7 +103,7 @@
        (case (:status game)
          :waiting "Die Straße wartet"
          :finished "Die Woche ist entschieden"
-         (list "Tick " (:tick game) " · " [:span {:x-text "seconds + 's'"} "…"]))]
+         (list "Tick " (number (:tick game)) " · " [:span.number {:x-text "seconds + 's'"} "…"]))]
       [:strong (:name game)]]]))
 
 (defn game-shell [title game viewer active content server-now]
@@ -121,7 +123,7 @@
          [:head [:meta {:charset "utf-8"}] [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
           [:link {:rel "preconnect" :href "https://fonts.googleapis.com"}]
           [:link {:rel "preconnect" :href "https://fonts.gstatic.com" :crossorigin true}]
-          [:link {:rel "stylesheet" :href "https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&display=swap"}]
+          [:link {:rel "stylesheet" :href "https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&family=Silkscreen&display=swap"}]
           [:link {:rel "stylesheet" :href "/assets/css/app.css"}]
           [:script {:defer true :src "https://unpkg.com/htmx.org@2.0.4"}]
           [:script {:defer true :src "https://unpkg.com/alpinejs@3.14.8/dist/cdn.min.js"}]

@@ -13,7 +13,7 @@
     [:img {:src (str "/assets/icons/" (get demographic-icons demographic "dem_foodie") "_48.png")
            :alt "" :width 48 :height 48}]
     (label demographic)]
-   [:strong count]])
+   [:strong (layout/number count)]])
 (defn research-card [game token item]
   [:article {:id (str "research-" (name (:id item))) :class "offer-card"}
    [:div.offer-card__top [:div [:h2 (:name item)] [:p (:description item)]] (layout/icon (get icons (:id item) "nav_research") "")]
@@ -21,7 +21,12 @@
    [:p.meta "Stadtspitze: " (if (seq (:leaders item)) (str/join ", " (map :player-name (:leaders item))) "noch niemand")]
    [:form {:method "post" :action (str "/games/" (:game-token game) "/research") :hx-post (str "/games/" (:game-token game) "/research") :hx-target (str "#research-" (name (:id item))) :hx-swap "outerHTML"}
     [:input {:type "hidden" :name "__anti-forgery-token" :value token}] [:input {:type "hidden" :name "research-id" :value (name (:id item))}]
-    (layout/button {:disabled (not (:available? item))} (cond (>= (:level item) (:maximum-level item)) "Ausgeforscht" (:available? item) (str "Forschen · " (money (:cost item))) :else (str "Benötigt " (money (:cost item)))))]])
+    (layout/button
+     {:disabled (not (:available? item))}
+     (cond
+       (>= (:level item) (:maximum-level item)) "Ausgeforscht"
+       (:available? item) ["Forschen · " (layout/number (money (:cost item)))]
+       :else ["Benötigt " (layout/number (money (:cost item)))]))]])
 (defn page [{:keys [game viewer research anti-forgery-token notice hx?]}]
   (-> (layout/game-response (str (:name game) " | Forschung") game viewer :research
                             [[:header.screen-head (layout/icon "nav_research" "") [:div [:h1 "Forschung"] [:p "Die Fritteuse lernt langsam, aber bestimmt."]]]

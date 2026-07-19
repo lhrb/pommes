@@ -261,6 +261,13 @@ h3,
 .numeric {
   text-align: right;
 }
+.number {
+  font-family: "Silkscreen", monospace;
+  font-weight: 400;
+}
+.resource .number {
+  font-family: "Silkscreen", monospace;
+}
 .meter {
   height: 13px;
   border: 2px solid var(--ink);

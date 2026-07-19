@@ -117,7 +117,7 @@
                          [:li
                           [:span.city-demographics__swatch {:style (str "background:" (nth chart-colors (mod index (count chart-colors))))}]
                           (demographic-icon id (str (name id) ": " (quantity population)))
-                          [:strong (quantity population)]])
+                          [:strong (layout/number (quantity population))]])
                        entries)]]
         [:p.meta "Die Stadt zählt noch nach. Niemand möchte die Verantwortung für die letzte Zahl übernehmen."])])))
 
@@ -150,7 +150,7 @@
                 [:line.profit-chart__zero {:x1 zero-x :x2 zero-x :y1 2 :y2 26}]
                 [:rect {:x left :y 5 :width width :height 18
                         :fill (nth chart-colors (mod index (count chart-colors)))}]]
-               [:strong (money profit)]]))
+               [:strong (layout/number (money profit))]]))
           entries)]
         [:p.meta "Noch keine Bude hat einen Ansturm abgerechnet."])])))
 
@@ -200,7 +200,8 @@
       (if (seq sources)
         [:div.grid.grid--two
          (for [[source points] (sort-by (comp str key) sources)]
-           (layout/stat-row (get prestige-labels source (name source)) (format "%.1f" (double points))))]
+           (layout/stat-row (get prestige-labels source (name source))
+                            (layout/number (format "%.1f" (double points)))))]
         [:p.meta "Noch ist dein Ruf ein ordentlich gefaltetes, leeres Blatt."])
       (when latest
         [:p.meta (str "Letzte Wertung bei Tick " (:tick latest) ": "
@@ -237,10 +238,10 @@
                           (layout/badge "Letzter Ansturm")]
                          (if viewer-result
                            [:div.grid.grid--two
-                            (layout/stat-row "Verkäufe" (quantity (:sales viewer-result)))
-                            (layout/stat-row "Umsatz" (money (:revenue viewer-result)))
-                            (layout/stat-row "Gewinn" (money (:profit viewer-result)))
-                            (layout/stat-row "Kasse" (money (:money viewer-result)))
+                            (layout/stat-row "Verkäufe" (layout/number (quantity (:sales viewer-result))))
+                            (layout/stat-row "Umsatz" (layout/number (money (:revenue viewer-result))))
+                            (layout/stat-row "Gewinn" (layout/number (money (:profit viewer-result))))
+                            (layout/stat-row "Kasse" (layout/number (money (:money viewer-result))))
                             (dish-result "Dein meistverkauftes Gericht" (:own dishes) false)]
                            [:p "Die Fritteuse wartet auf ihren ersten Bericht. Eine Karte wäre ein Anfang, auch wenn die Stadt das nicht so nennen würde."])])
           (when latest-tick
