@@ -124,12 +124,11 @@
   (when latest-tick
     (let [by-player (into {} (map (juxt :player-id identity) (:players latest-tick)))
           colors (zipmap (map :id players) (cycle player-colors))]
-      [:section.panel.panel--tight.market-history {:x-data "{expanded:false}"}
-       [:button.market-history__toggle {:type "button" "@click" "expanded = !expanded"
-                                        ":aria-expanded" "expanded.toString()" :aria-controls "latest-market-details"}
+      [:details.panel.panel--tight.market-history
+       [:summary.market-history__toggle
         [:span (str "Marktanteile im letzten Tick · " (:tick latest-tick))]
-        [:span {:aria-hidden "true" "x-text" "expanded ? '−' : '+'"} "+"]]
-       [:div {:id "latest-market-details" :x-show "expanded" :x-cloak true}
+        [:span.market-history__indicator {:aria-hidden "true"}]]
+       [:div {:id "latest-market-details"}
         [:p.meta "Die Kundschaft verteilt sich. Manche gehen ohne Pommes nach Hause."]
         [:div.market-donut-grid
          (for [{:keys [id]} (:demographics city)
@@ -150,8 +149,9 @@
                 [:span.market-donut__swatch {:style (str "background:" color)}]
                 [:span label] [:strong (quantity sales)]])]])]]])))
 
-(defn page [{:keys [game viewer players city latest-tick form errors notice anti-forgery-token forecast hx?]}]
+(defn page [{:keys [game viewer players city latest-tick form errors notice active-dish anti-forgery-token forecast hx?]}]
   (let [options (setup-options)
+        active-dish (or active-dish 1)
         dishes (take (:dish-count options) (concat (or (:dishes form) (:dishes viewer)) (repeat {})))]
     (-> (layout/game-response
          (str "Gerichte & Markt | " (:name game)) game viewer :dishes
@@ -166,27 +166,31 @@
                                  :action (str "/games/" (:game-token game) "/dishes/setup")
                                  :hx-post (str "/games/" (:game-token game) "/dishes/impact")
                                  :hx-trigger "input changed delay:350ms, change"
-                                 :hx-target "#market-impact" :hx-swap "innerHTML"
-                                 :x-data "{tab:1}"}
+                                 :hx-target "#market-impact" :hx-swap "innerHTML"}
                           (when anti-forgery-token [:input {:type "hidden" :name "__anti-forgery-token" :value anti-forgery-token}])
                           [:fieldset [:legend "Innenleben"]
                            [:label {:for "interior"} "Budenstimmung"
                            (select-input "interior" (or (:interior form) (:interior viewer)) (:interiors options) nil)]
                            (when-let [interior-errors (seq (:interior errors))]
                              [:ul.errors (for [error interior-errors] [:li error])])]
-                          [:div.menu-tabs {:role "tablist" :aria-label "Gericht auswählen"}
+                          [:div.menu-tab-controls
                            (for [index (range 1 (inc (:dish-count options)))]
-                             [:button {:type "button" :role "tab" "@click" (str "tab=" index)
-                                       ":aria-selected" (str "(tab === " index ").toString()")
+                             [:input.menu-tab__control {:type "radio" :name "active-dish"
+                                                        :id (str "dish-tab-" index) :value index
+                                                        :checked (= active-dish index)}])
+                           [:div.menu-tabs {:role "radiogroup" :aria-label "Gericht auswählen"}
+                            (for [index (range 1 (inc (:dish-count options)))]
+                              [:label {:for (str "dish-tab-" index)
                                        :aria-controls (str "dish-panel-" index)
-                                       ":class" (str "{'is-active': tab === " index "}")}
-                              (str "Gericht " index)])]
-                          (map-indexed (fn [index dish]
-                                         [:div.menu-tab__panel {:id (str "dish-panel-" (inc index))
-                                                                :role "tabpanel" :x-cloak true
-                                                                :x-show (str "tab === " (inc index))}
-                                          (dish-field options (inc index) dish errors)])
-                                       dishes)
+                                       :aria-checked (= active-dish index)}
+                               (str "Gericht " index)])]
+                           [:div.menu-tab__panels
+                            (map-indexed (fn [index dish]
+                                           [:div.menu-tab__panel {:id (str "dish-panel-" (inc index))
+                                                                  :role "region"
+                                                                  :aria-label (str "Gericht " (inc index))}
+                                            (dish-field options (inc index) dish errors)])
+                                         dishes)]]
                           [:div {:id "market-impact"} (impact-panel forecast)]
                           (layout/button {:type "button" :hx-post (str "/games/" (:game-token game) "/dishes/setup")
                                           :hx-include "#menu-form" :hx-target "#game-screen" :hx-swap "outerHTML"}

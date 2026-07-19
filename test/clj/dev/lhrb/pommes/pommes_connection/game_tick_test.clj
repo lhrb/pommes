@@ -345,8 +345,10 @@
               setup-response
               (handler {:request-method :post
                         :uri (str "/games/" game-token "/dishes/setup")
+                        :headers {"hx-request" "true"}
                         :session {:game-token game-token :game-player-id game-player-id}
                         :params {:interior "modern"
+                                 :active-dish "3"
                                  :dish-1-name "Budget"
                                  :dish-1-size "medium"
                                  :dish-1-seasoning "salt"
@@ -399,6 +401,7 @@
           (is (= 401 (:status unauthorized-hud-response)))
           (is (= 200 (:status dishes-response)))
           (is (= 200 (:status htmx-dishes-response)))
+          (is (re-find #"name=\"active-dish\"" (:body htmx-dishes-response)))
           (is (re-find #"screen--dishes" (:body htmx-dishes-response)))
           (is (re-find #"id=\"game-nav\"" (:body htmx-dishes-response)))
           (is (re-find #"hx-swap-oob=\"true\"" (:body htmx-dishes-response)))
@@ -415,13 +418,17 @@
           (is (re-find #"Marktanteile im letzten Tick" (:body dishes-response)))
           (is (re-find #"market-donut" (:body dishes-response)))
           (is (re-find #"Kauft nicht" (:body dishes-response)))
+          (is (re-find #"<details class=\"panel panel--tight market-history\"" (:body dishes-response)))
+          (is (not (re-find #"expanded:false" (:body dishes-response))))
           (is (re-find #"Riesenportion \(€1,00\)" (:body dishes-response)))
           (is (re-find #"Wareneinsatz" (:body dishes-response)))
           (is (= 400 (:status invalid-setup-response)))
           (is (re-find #"Name is required" (:body invalid-setup-response)))
-          (is (= 302 (:status setup-response)))
-          (is (= (str "/games/" game-token "/dishes?setup-result=saved")
-                 (get-in setup-response [:headers "Location"])))))
+          (is (= 200 (:status setup-response)))
+          (is (re-find #"Menü gespeichert" (:body setup-response)))
+          (is (not (re-find #"market-history\" open" (:body setup-response))))
+          (is (re-find #"(?s)<input(?=[^>]*id=\"dish-tab-3\")(?=[^>]*checked)[^>]*>"
+                       (:body setup-response)))))
       (finally
         (Files/deleteIfExists database-file)))))
 

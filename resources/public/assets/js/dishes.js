@@ -17,7 +17,3 @@ function updateDishCost(event) {
 }
 
 document.addEventListener("change", updateDishCost);
-
-document.addEventListener("htmx:load", ({ detail: { elt } }) => {
-  window.Alpine?.initTree(elt);
-});

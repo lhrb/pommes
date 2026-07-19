@@ -31,6 +31,11 @@
       (when (Double/isFinite parsed) parsed))
     (catch Exception _ nil)))
 
+(defn- active-dish [params]
+  (let [dish-count (:dish-count (dishes-view/setup-options))
+        selected (some-> (get params :active-dish) number long)]
+    (if (<= 1 (or selected 0) dish-count) selected 1)))
+
 (defn- dish-form [params index]
   (let [prefix (str "dish-" index "-")
         options (dishes-view/setup-options)]
@@ -152,6 +157,7 @@
                                :forecast (forecast-for datasource data setup)
                                :notice (when (= "saved" (get-in request [:params :setup-result]))
                                          "Menü gespeichert. Änderungen gelten ab dem nächsten Ansturm.")
+                               :active-dish (active-dish (:params request))
                                :anti-forgery-token (:anti-forgery-token request)
                                :hx? (htmx? request))))
     (response/status (response/response "Log in to access this game.") 401)))
@@ -165,10 +171,12 @@
       (response/not-found "Game player not found")
 
       :else
-      (let [{:keys [form errors setup]} (setup-from-params (:params request))]
+      (let [{:keys [form errors setup]} (setup-from-params (:params request))
+            active-dish (active-dish (:params request))]
         (if (seq errors)
           (response/status (dishes-view/page (assoc data
                                                    :form form :errors errors
+                                                   :active-dish active-dish
                                                    :forecast (forecast-for datasource data
                                                                             (select-keys (:viewer data) [:interior :dishes]))
                                                    :anti-forgery-token (:anti-forgery-token request)
@@ -180,7 +188,8 @@
                   notice "Menü gespeichert. Änderungen gelten ab dem nächsten Ansturm."]
             (if (htmx? request)
               (dishes-view/page (assoc fresh :forecast (forecast-for datasource fresh setup)
-                                        :notice notice :anti-forgery-token (:anti-forgery-token request) :hx? true))
+                                        :notice notice :active-dish active-dish
+                                        :anti-forgery-token (:anti-forgery-token request) :hx? true))
               (response/redirect (str "/games/" (game-repository/normalize-token game-token)
                                       "/dishes?setup-result=saved"))))))))))
 
