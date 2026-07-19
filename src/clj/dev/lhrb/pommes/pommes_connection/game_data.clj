@@ -197,9 +197,11 @@
                          [20160 100000]]
     :demographics-update-every-ticks 720
     :composition-drift-start-tick 2880
-    :minimum-demographic-share 0.05
-    :maximum-demographic-share 0.40
+    :minimum-demographic-share 0.07
+    :maximum-demographic-share 0.35
     :maximum-share-change 0.015
+    :trend-transfer-share [0.08 0.12]
+    :trend-completion-tolerance 0.001
 
     :demographics
     [{:id :students

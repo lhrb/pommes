@@ -1,6 +1,7 @@
 (ns dev.lhrb.pommes.pommes-connection.game-tick-test
   (:require
    [clojure.edn :as edn]
+   [clojure.set :as set]
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]
    [dev.lhrb.pommes.pommes-connection.black-market :as black-market]
@@ -171,24 +172,48 @@
       (is (= (set (keys (:interiors catalog)))
              (set (keys (get-in demographic [:preferences :interior]))))))))
 
-(deftest city-population-growth-and-composition-drift-are-bounded
+(deftest city-population-growth-and-composition-trends-are-bounded
   (let [city (demographics-simulation/initial-city
               (:city game-data/game-data) 42)
-        before-drift (demographics-simulation/evolve-city city 5700)
+        first-trend (demographics-simulation/evolve-city city 2880)
+        continuing-trend (demographics-simulation/evolve-city city 3600)
+        next-trend (demographics-simulation/evolve-city city 9360)
         after-drift (demographics-simulation/evolve-city city 5760)
+        final-city (demographics-simulation/evolve-city city 20160)
         repeated (demographics-simulation/evolve-city city 5760)
         shares (mapv #(/ (double (:population %)) (:population after-drift))
                      (:demographics after-drift))
         share-changes (map #(Math/abs (- %1 %2))
                            shares
-                           (mapv #(/ (double (:population %)) (:population before-drift))
-                                 (:demographics before-drift)))]
+                           (mapv #(/ (double (:population %)) (:population first-trend))
+                                 (:demographics first-trend)))
+        trend (:demographic-trend first-trend)
+        growing-id (:growing-id trend)
+        shrinking-id (:shrinking-id trend)
+        share (fn [city demographic-id]
+                (/ (double (:population (first (filter #(= demographic-id (:id %))
+                                                       (:demographics city)))))
+                   (:population city)))]
     (is (= 15000 (:population city)))
     (is (= 40370 (:population after-drift)))
     (is (= (:population after-drift)
            (reduce + (map :population (:demographics after-drift)))))
-    (is (every? #(<= 0.05 % 0.40) shares))
-    (is (<= (apply max share-changes) 0.016))
+    (is (every? #(<= 0.07 % 0.35) shares))
+    (is (= (select-keys trend [:growing-id :shrinking-id :transfer-share])
+           (select-keys (:demographic-trend continuing-trend)
+                        [:growing-id :shrinking-id :transfer-share])))
+    (is (< (:remaining-transfer-share (:demographic-trend continuing-trend))
+           (:remaining-transfer-share trend)))
+    (is (> (share continuing-trend growing-id) (share first-trend growing-id)))
+    (is (< (share continuing-trend shrinking-id) (share first-trend shrinking-id)))
+    (is (empty? (set/intersection
+                 #{growing-id shrinking-id}
+                 (set (vals (select-keys (:demographic-trend next-trend)
+                                        [:growing-id :shrinking-id]))))))
+    (is (every? #(<= 0.07 % 0.35)
+                (mapv #(/ (double (:population %)) (:population final-city))
+                      (:demographics final-city))))
+    (is (<= (apply max share-changes) 0.121))
     (is (= after-drift repeated))))
 
 (defn- anti-forgery-token [body]

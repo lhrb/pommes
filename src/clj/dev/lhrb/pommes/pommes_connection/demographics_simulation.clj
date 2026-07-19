@@ -4,9 +4,11 @@
   {:population-anchors [[0 15000] [2880 30000] [11520 70000] [20160 100000]]
    :demographics-update-every-ticks 720
    :composition-drift-start-tick 2880
-   :minimum-demographic-share 0.05
-   :maximum-demographic-share 0.40
-   :maximum-share-change 0.01})
+   :minimum-demographic-share 0.07
+   :maximum-demographic-share 0.35
+   :maximum-share-change 0.01
+   :trend-transfer-share [0.08 0.12]
+   :trend-completion-tolerance 0.001})
 
 (defn- city-rule
   [city key]
@@ -94,43 +96,112 @@
   (let [[next-state value] (next-random random-state)]
     [next-state (min (dec count) (long (Math/floor (* value count))))]))
 
-(defn- drift-shares
+(defn- random-between
+  [random-state minimum maximum]
+  (let [[next-state value] (next-random random-state)]
+    [next-state (+ minimum (* value (- maximum minimum)))]))
+
+(defn- demographic-index
+  [city demographic-id]
+  (first (keep-indexed #(when (= demographic-id (:id %2)) %1)
+                       (:demographics city))))
+
+(defn- active-trend?
+  [trend]
+  (contains? trend :remaining-transfer-share))
+
+(defn- select-trend
   [city shares]
   (let [minimum (city-rule city :minimum-demographic-share)
         maximum (city-rule city :maximum-demographic-share)
-        maximum-change (city-rule city :maximum-share-change)
-        source-candidates (keep-indexed #(when (> %2 minimum) %1) shares)
-        random-state (:random-state city)]
-    (if (empty? source-candidates)
-      [random-state shares]
-      (let [[random-state source-position]
-            (random-index random-state (count source-candidates))
-            source (nth source-candidates source-position)
-            destination-candidates
-            (keep-indexed #(when (and (not= %1 source) (< %2 maximum)) %1) shares)]
-        (if (empty? destination-candidates)
-          [random-state shares]
-          (let [[random-state destination-position]
-                (random-index random-state (count destination-candidates))
-                destination (nth destination-candidates destination-position)
-                transfer (min maximum-change
-                              (- (nth shares source) minimum)
-                              (- maximum (nth shares destination)))]
+        [minimum-transfer maximum-transfer]
+        (city-rule city :trend-transfer-share)
+        [random-state transfer-share]
+        (random-between (:random-state city) minimum-transfer maximum-transfer)
+        previous-ids (into #{} (keep #(get (:demographic-trend city) %)
+                                     [:growing-id :shrinking-id]))
+        growing-candidates
+        (keep-indexed #(when (and (not (contains? previous-ids (:id (nth (:demographics city) %1))))
+                                  (<= %2 (- maximum transfer-share)))
+                         %1)
+                      shares)]
+    (if (empty? growing-candidates)
+      [random-state nil]
+      (let [[random-state growing-position]
+            (random-index random-state (count growing-candidates))
+            growing (nth growing-candidates growing-position)
+            shrinking-candidates
+            (keep-indexed #(when (and (not= %1 growing)
+                                       (not (contains? previous-ids (:id (nth (:demographics city) %1))))
+                                       (>= %2 (+ minimum transfer-share)))
+                            %1)
+                          shares)]
+        (if (empty? shrinking-candidates)
+          [random-state nil]
+          (let [[random-state shrinking-position]
+                (random-index random-state (count shrinking-candidates))
+                shrinking (nth shrinking-candidates shrinking-position)]
             [random-state
-             (-> shares
-                 (update source - transfer)
-                 (update destination + transfer))]))))))
+             {:growing-id (:id (nth (:demographics city) growing))
+              :shrinking-id (:id (nth (:demographics city) shrinking))
+              :transfer-share transfer-share
+              :remaining-transfer-share transfer-share}]))))))
+
+(defn- trend-complete?
+  [city shares trend]
+  (let [growing (demographic-index city (:growing-id trend))
+        shrinking (demographic-index city (:shrinking-id trend))
+        tolerance (city-rule city :trend-completion-tolerance)
+        minimum (city-rule city :minimum-demographic-share)
+        maximum (city-rule city :maximum-demographic-share)]
+    (or (not (active-trend? trend))
+        (nil? growing)
+        (nil? shrinking)
+        (<= (:remaining-transfer-share trend) tolerance)
+        (<= (- (nth shares shrinking) minimum) tolerance)
+        (<= (- maximum (nth shares growing)) tolerance))))
+
+(defn- move-toward-trend
+  [city shares trend]
+  (let [growing (demographic-index city (:growing-id trend))
+        shrinking (demographic-index city (:shrinking-id trend))
+        minimum (city-rule city :minimum-demographic-share)
+        maximum (city-rule city :maximum-demographic-share)
+        maximum-change (city-rule city :maximum-share-change)
+        transfer (min maximum-change
+                      (:remaining-transfer-share trend)
+                      (- (nth shares shrinking) minimum)
+                      (- maximum (nth shares growing)))]
+    (if (pos? transfer)
+      [(-> shares
+           (update shrinking - transfer)
+           (update growing + transfer))
+       (update trend :remaining-transfer-share - transfer)]
+      [shares trend])))
+
+(defn- drift-shares
+  [city shares]
+  (let [trend (:demographic-trend city)]
+    (if (and trend (not (trend-complete? city shares trend)))
+      (let [[shares trend] (move-toward-trend city shares trend)]
+        [(:random-state city) shares trend])
+      (let [[random-state trend] (select-trend city shares)]
+        (if trend
+          (let [[shares trend] (move-toward-trend city shares trend)]
+            [random-state shares trend])
+          [random-state shares nil])))))
 
 (defn- advance-once
   [city update-tick]
   (let [population (next-population city update-tick)
         shares (demographic-shares (:demographics city))
-        [random-state shares]
+        [random-state shares trend]
         (if (>= update-tick (city-rule city :composition-drift-start-tick))
           (drift-shares city shares)
-          [(:random-state city) shares])]
+          [(:random-state city) shares (:demographic-trend city)])]
     (-> (with-population city population shares)
         (assoc :random-state random-state
+               :demographic-trend trend
                :last-demographics-tick update-tick
                :next-demographics-at-tick
                (+ update-tick (city-rule city :demographics-update-every-ticks))))))
@@ -147,21 +218,20 @@
  (require '[dev.lhrb.pommes.pommes-connection.game-data :as game-data])
 
 
- ;; Start a city and inspect its growth over one seven-day game.
- (def city (initial-city (:city game-data/game-data) 42))
- (let [city (initial-city (:city game-data/game-data) 43)]
-  (->> (range 0 20161 720)
-       (map (fn [tick]
-                (let [city (evolve-city city tick)]
-                  {:tick tick
-                   :population (:population city)
-                   :shares (into {}
-                                 (map (juxt :id
-                                            #(int (* 100
-                                                     (double
-                                                      (/ (:population %)
-                                                         (:population city))))))
-                                      (:demographics city)))})))))
-
-  ;; The city remains visibly smaller during the development phase.
- (:population (evolve-city city 5760)))
+ ;; Follow one seeded city through a seven-day game. Repeated growing and
+ ;; shrinking IDs show how each market trend remains active across updates.
+ (let [cities (reductions evolve-city
+                         (initial-city (:city game-data/game-data) 42)
+                         (range 0 20161 720))]
+   (mapv (fn [city]
+           {:tick (str (/ (:last-demographics-tick city) 120) "h")
+            :population (:population city)
+            :trend (select-keys (:demographic-trend city)
+                                [:growing-id :shrinking-id
+                                 :transfer-share :remaining-transfer-share])
+            :shares (into {}
+                          (map (fn [{:keys [id population]}]
+                                 [id (format "%.1f%%"
+                                             (* 100.0 (/ population (:population city))))])
+                               (:demographics city)))})
+         cities)))
