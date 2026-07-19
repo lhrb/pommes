@@ -1,9 +1,9 @@
 (ns dev.lhrb.pommes.pommes-connection.game-tick
   (:require
+   [dev.lhrb.pommes.pommes-connection.action-simulation :as action-simulation]
    [dev.lhrb.pommes.pommes-connection.game-repository :as game-repository]
    [dev.lhrb.pommes.pommes-connection.game-log :as game-log]
    [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
-   [dev.lhrb.pommes.pommes-connection.simulation :as simulation]
    [next.jdbc :as jdbc]))
 
 (def default-simulation-config
@@ -13,8 +13,14 @@
   [simulation-config]
   (* 1000 (get-in simulation-config [:rules :tick-seconds])))
 
+(defn- target-strength
+  [players target-id]
+  (let [ranked (mapv :id (sort-by (juxt (comp - :prestige) :id) players))
+        rank (.indexOf ranked target-id)]
+    (case rank 0 1.5 1 1.25 1.0)))
+
 (defn- apply-action-use
-  [state {:keys [id target-game-player-id action-id]}]
+  [state {:keys [id actor-game-player-id target-game-player-id action-id cost]}]
   (let [action (game-data/action (keyword action-id))]
     (when-not action
       (throw (ex-info "Unknown game action" {:action-id action-id})))
@@ -26,6 +32,10 @@
                                 (mapv #(assoc %
                                               :ticks-left (:duration action)
                                               :action-id (:id action)
+                                              :actor-player-id actor-game-player-id
+                                              :target-player-id target-game-player-id
+                                              :action-cost cost
+                                              :target-strength (target-strength players target-game-player-id)
                                               :action-use-id id)
                                       (:effects action)))
                         player))
@@ -39,7 +49,7 @@
          (map (juxt :demographic-id :unserved-demand)
               (:last-market state)))
    :players
-   (mapv (fn [{:keys [id money prestige regulars last-tick]}]
+   (mapv (fn [{:keys [id money prestige regulars last-tick game-stats]}]
            {:player-id id
             :sales (:sales last-tick)
             :regular-sales (:regular-sales last-tick)
@@ -56,6 +66,9 @@
             :demographic-sales (:demographic-sales last-tick)
             :money money
             :prestige prestige
+            :prestige-by-source (:prestige-by-source game-stats)
+            :score-round (:latest-score-round game-stats)
+            :action-result (:latest-action-result game-stats)
             :regulars regulars})
          (:players state))})
 
@@ -68,7 +81,7 @@
      (let [state (game-repository/load-game-state tx game-id simulation-config)
            action-uses (game-repository/load-due-action-uses tx game-id (inc (:tick state)))
            state-with-actions (reduce apply-action-use state action-uses)
-           updated-state (assoc (simulation/simulate-tick state-with-actions)
+           updated-state (assoc (action-simulation/simulate-tick state-with-actions)
                                 :next-tick-at (+ (:next-tick-at state)
                                                  (tick-millis simulation-config)))
            summary (tick-summary updated-state)

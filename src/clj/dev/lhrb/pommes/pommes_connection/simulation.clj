@@ -3,8 +3,8 @@
    [dev.lhrb.pommes.pommes-connection.black-market :as black-market]
    [dev.lhrb.pommes.pommes-connection.demographics-simulation :as demographics-simulation]
    [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
-   [dev.lhrb.pommes.pommes-connection.regulars-simulation :as regulars]
-   [integrant.repl.state :as state]))
+   [dev.lhrb.pommes.pommes-connection.prestige :as prestige]
+   [dev.lhrb.pommes.pommes-connection.regulars-simulation :as regulars]))
 
 ;; Each tick assigns a whole number of customers to offers. Softmax shares
 ;; still express preference, while largest-remainder allocation keeps the
@@ -112,26 +112,31 @@
 ;; ---------------------------------------------------------------------------
 
 (defn dish-cost
-  [catalog {:keys [pommes topping]}]
-  (+ (double
-      (get-in catalog
-              [:sizes (:size pommes) :cost]
-              0.0))
+  ([catalog dish]
+   (dish-cost catalog dish 1.0))
+  ([catalog {:keys [pommes topping]} ingredient-cost-multiplier]
+   (* (double ingredient-cost-multiplier)
+      (+ (double
+          (get-in catalog
+                  [:sizes (:size pommes) :cost]
+                  0.0))
 
-     (double
-      (get-in catalog
-              [:seasonings (:seasoning pommes) :cost]
-              0.0))
+         (double
+          (get-in catalog
+                  [:seasonings (:seasoning pommes) :cost]
+                  0.0))
 
-     (double
-      (get-in catalog
-              [:toppings topping :cost]
-              0.0))))
+         (double
+          (get-in catalog
+                  [:toppings topping :cost]
+                  0.0))))))
 
 (defn dish-margin
-  [catalog dish]
-  (- (double (:price dish))
-     (dish-cost catalog dish)))
+  ([catalog dish]
+   (dish-margin catalog dish 1.0))
+  ([catalog dish ingredient-cost-multiplier]
+   (- (double (:price dish))
+      (dish-cost catalog dish ingredient-cost-multiplier))))
 
 ;; ---------------------------------------------------------------------------
 ;; Base demographic preferences
@@ -594,8 +599,12 @@
          player
          demographic)
 
+        research-quality
+        (regulars/research-modifier (:research player) (get-in game-data/game-data [:research :items])
+                                    :concept-quality (:topping dish))
+
         total
-        (+ preference
+        (+ preference research-quality
            relative-price
            status
            topping-trend
@@ -610,6 +619,7 @@
      :topping-trend topping-trend
      :positioning-trend positioning-trend
      :effects effects
+     :research-quality research-quality
      :total total}))
 
 (defn best-offer
@@ -634,6 +644,11 @@
                  player
                  dish)]
 
+            (let [research-items (get-in game-data/game-data [:research :items])
+                  order-value (regulars/research-modifier (:research player) research-items
+                                                          :order-value (:topping dish))
+                  efficiency (regulars/research-modifier (:research player) research-items
+                                                         :ingredient-efficiency (:topping dish))]
             {:kind :purchase
              :player-id (:id player)
              :dish-id (:id dish)
@@ -648,8 +663,10 @@
 
              :components components
              :order-value-multiplier
-             (+ 1.0 (effect-modifier player :average-order-size demographic))
-             :utility (:total components)})))
+             (* (+ 1.0 order-value)
+                (+ 1.0 (effect-modifier player :average-order-size demographic)))
+             :ingredient-cost-multiplier (- 1.0 efficiency)
+             :utility (:total components)}))))
        (apply max-key :utility)))
 
 (defn outside-option
@@ -716,8 +733,11 @@
 
    Remaining orders go to the largest fractional remainders. Ties preserve
    the original choice order, keeping equivalent simulations reproducible."
-  [demand choices]
-  (let [ranked
+  ([demand choices]
+   (allocate-orders demand choices 0))
+  ([demand choices tie-offset]
+  (let [choice-count (count choices)
+        ranked
         (mapv (fn [index choice]
                 (let [expected (* demand (double (:share choice)))
                       sales (long (Math/floor expected))]
@@ -731,11 +751,48 @@
         bonus-indexes (into #{}
                             (map :index)
                             (take remaining
-                                  (sort-by (juxt (comp - :remainder) :index)
+                                  (sort-by (juxt (comp - :remainder)
+                                                 #(mod (- (:index %) tie-offset) choice-count))
                                            ranked)))]
     (mapv (fn [{:keys [index choice sales]}]
             [choice (+ sales (if (contains? bonus-indexes index) 1 0))])
-          ranked)))
+          ranked))))
+
+(defn- choice-key [choice]
+  (if (= :outside (:kind choice))
+    :outside
+    [(:player-id choice) (:dish-id choice)]))
+
+(defn allocate-orders-with-carry
+  "Largest-remainder allocation with durable per-choice fractions.
+
+   Small opening markets no longer give every tied order to the first player."
+  [demand choices previous-carry tie-offset]
+  (let [choice-count (count choices)
+        ranked (mapv (fn [index choice]
+                       (let [key (choice-key choice)
+                             raw (* demand (double (:share choice)))
+                             previous (double (get previous-carry key 0.0))
+                             sales (long (Math/floor raw))]
+                         {:index index :key key :choice choice :sales sales
+                          :raw raw :previous previous
+                          :priority (+ previous (- raw sales))}))
+                     (range) choices)
+        remaining (- demand (reduce + 0 (map :sales ranked)))
+        bonuses (frequencies
+                 (map :index
+                      (take remaining
+                            (cycle (sort-by (juxt (comp - :priority)
+                                                 #(mod (- (:index %) tie-offset) choice-count))
+                                            ranked)))))
+        allocations (mapv (fn [{:keys [index choice sales]}]
+                            [choice (+ sales (get bonuses index 0))])
+                          ranked)
+        next-carry (into {}
+                         (map (fn [{:keys [key raw previous index sales]}]
+                                [key (- (+ previous raw) sales (get bonuses index 0))]))
+                         ranked)]
+    [allocations next-carry]))
 
 (defn allocate-choice
   [catalog demographic choice sales]
@@ -763,14 +820,14 @@
          :topping (:topping dish)
          :positioning (:positioning choice)
          :price (double (:price dish))
-         :unit-cost (dish-cost catalog dish)
-         :unit-margin (dish-margin catalog dish)
+         :unit-cost (dish-cost catalog dish (:ingredient-cost-multiplier choice 1.0))
+         :unit-margin (dish-margin catalog dish (:ingredient-cost-multiplier choice 1.0))
          :order-value-multiplier (:order-value-multiplier choice 1.0)
          :revenue (* sales
                      (double (:price dish))
                      (:order-value-multiplier choice 1.0))
          :profit (* sales
-                    (dish-margin catalog dish)
+                    (dish-margin catalog dish (:ingredient-cost-multiplier choice 1.0))
                     (:order-value-multiplier choice 1.0))))
 
       (assoc
@@ -781,10 +838,9 @@
 (defn simulate-demographic
   [rules catalog market players demographic]
   (let [potential-demand
-        (long
-         (Math/round
-          (* (double (:population demographic))
-             (double (:eat-rate demographic)))))
+        (long (or (:tick-demand demographic)
+                  (Math/round (* (double (:population demographic))
+                                 (double (:eat-rate demographic 0.0))))))
 
         beta
         (double
@@ -810,11 +866,21 @@
           beta
           options)
 
+        tie-offset
+        (Math/floorMod
+         (+ (long (:tick demographic 0)) (long (hash (:id demographic))))
+         (count choices))
+
+        [order-allocation order-carry]
+        (allocate-orders-with-carry potential-demand choices
+                                    (get-in market [:order-carry (:id demographic)] {})
+                                    tie-offset)
+
         allocations
         (mapv
          (fn [[choice sales]]
            (allocate-choice catalog demographic choice sales))
-         (allocate-orders potential-demand choices))
+         order-allocation)
 
         purchases
         (filter
@@ -841,6 +907,8 @@
      :unserved-demand
      (:sales outside)
 
+     :order-carry order-carry
+
      :allocations allocations}))
 
 ;; ---------------------------------------------------------------------------
@@ -854,6 +922,24 @@
    :profit 0.0
    :dish-sales {}
    :demographic-sales {}})
+
+(defn allocate-city-demand
+  "Allocates deterministic whole orders and carries fractional demand forward."
+  [rules city]
+  (let [ticks-per-day (double (:ticks-per-day rules 2880))]
+    (reduce (fn [[city demographics] demographic]
+              (let [id (:id demographic)
+                    raw (+ (/ (* (double (:population demographic))
+                                 (double (:daily-order-rate demographic 0.0)))
+                              ticks-per-day)
+                           (double (get-in city [:demand-carry id] 0.0)))
+                    demand (long (Math/floor raw))]
+                [(assoc-in city [:demand-carry id] (- raw demand))
+                 (conj demographics (assoc demographic
+                                           :tick-demand demand
+                                           :tick (inc (long (:tick rules 0)))))]))
+            [city []]
+            (:demographics city))))
 
 (defn- add-demographic-sales
   [game-stats demographic-sales]
@@ -908,19 +994,16 @@
          sales))))
 
 (defn update-player
-  [player stats]
-  (-> player
+  [prestige-rules player stats]
+  (let [audit-loss (if (:audited? stats) (double (:audit-penalty prestige-rules 0.0)) 0.0)]
+    (-> player
       ;; Money changes by tax-adjusted profit, not revenue.
       (update
        :money
        (fnil + 0.0)
        (:profit stats))
 
-      ;; Every sold dish produces one prestige.
-      (update
-       :prestige
-       (fnil + 0)
-       (:sales stats))
+      (update :prestige #(max 0.0 (- (double (or % 0.0)) audit-loss)))
 
       (assoc
        :last-tick
@@ -930,9 +1013,14 @@
       ;; page can use this without replaying every historical game tick.
       (update :game-stats add-demographic-sales (:demographic-sales stats))
 
+      (update-in [:game-stats :score-window] prestige/add-window-stats stats)
+
+      (cond-> (pos? audit-loss)
+        (update-in [:game-stats :prestige-by-source :audits] (fnil - 0.0) audit-loss))
+
       (update
        :effects
-       tick-effects)))
+       tick-effects))))
 
 ;; ---------------------------------------------------------------------------
 ;; Market memory
@@ -1053,6 +1141,7 @@
          demographic)]
 
     (-> market
+        (assoc-in [:order-carry demographic-id] (:order-carry result))
         (assoc-in
          [:recent-shares
           demographic-id
@@ -1130,8 +1219,8 @@
           city
           (demographics-simulation/initial-city city))
 
-        demographics
-        (:demographics city)
+        [city demographics]
+        (allocate-city-demand (assoc rules :tick (or tick 0)) city)
 
         ;; The complete tick uses one immutable snapshot of all player offers.
         offers
@@ -1142,7 +1231,10 @@
                  (best-offer rules (or market {}) demographic player)]))
 
         prepared-regulars
-        (regulars/prepare-regulars (:regulars state) (get-in state [:research :items])
+        (regulars/prepare-regulars (assoc (:regulars state)
+                                         :ticks-per-day (:ticks-per-day rules 2880)
+                                         :tick (inc (or tick 0)))
+                                   (get-in state [:research :items])
                                    demographics players offers)
 
         available-demographics
@@ -1169,16 +1261,10 @@
                     player players]
                 (let [returns (get-in prepared-regulars [(:id player) (:id demographic) :returns] 0)]
                   (when (pos? returns)
-                    (let [offer (get offers [(:id player) (:id demographic)])
-                          value-modifier (regulars/research-modifier (:research player)
-                                                                      (get-in state [:research :items])
-                                                                      :order-value
-                                                                      (:topping (:dish offer)))]
+                    (let [offer (get offers [(:id player) (:id demographic)])]
                       (allocate-choice catalog demographic
                                        (-> offer
-                                           (assoc :source :regular)
-                                           (update :order-value-multiplier #(* (or % 1.0)
-                                                                                 (+ 1.0 value-modifier))))
+                                           (assoc :source :regular))
                                        returns))))))
 
         allocations
@@ -1192,7 +1278,8 @@
                 {} allocations)
 
         updated-regulars
-        (regulars/finalize-regulars (:regulars state) (get-in state [:research :items])
+        (regulars/finalize-regulars (assoc (:regulars state) :tick (inc (or tick 0)))
+                                    (get-in state [:research :items])
                                     prepared-regulars players offers normal-sales)
 
         stats
@@ -1207,9 +1294,19 @@
            (let [[taxed-player receipt]
                  (black-market/settle-player black-market (inc (or tick 0)) player
                                              (get stats (:id player) empty-stats))]
-             (assoc (update-player taxed-player receipt)
+             (assoc (update-player (:prestige state) taxed-player receipt)
                     :regulars (get updated-regulars (:id player) {}))))
          players)
+
+        next-tick (inc (or tick 0))
+
+        updated-players
+        (if (and (pos? (get-in state [:game :score-every-ticks] 0))
+                 (zero? (mod next-tick (get-in state [:game :score-every-ticks]))))
+          (prestige/apply-round updated-players
+                                (prestige/score-round state updated-players demographics)
+                                next-tick)
+          updated-players)
 
         updated-market
         (update-market
@@ -1219,11 +1316,11 @@
          results)
 
         updated-city
-        (demographics-simulation/evolve-city city (inc (or tick 0)))]
+        (demographics-simulation/evolve-city city next-tick)]
 
     (assoc
      state
-     :tick (inc (or tick 0))
+     :tick next-tick
      :players updated-players
      :market updated-market
      :city updated-city
@@ -1244,16 +1341,16 @@
   (merge
    {:tick 0
     :players
-    [{:id :fritza :money 20.0 :prestige 0.0 :interior :street-food :market-modifiers {} :effects []
+    [{:id :fritza :money 1500.0 :prestige 0.0 :interior :street-food :market-modifiers {} :effects []
       :dishes [{:id :cheap-ketchup :pommes {:size :small :seasoning :salt} :topping :ketchup :price 3.50}
                {:id :large-mayo :pommes {:size :large :seasoning :pommesgewuerz} :topping :mayo :price 5.20}
                {:id :special :pommes {:size :large :seasoning :pommesgewuerz} :topping :special :price 6.00}]}
-     {:id :goldene-gabel :money 20.0 :prestige 0.0 :interior :classic :market-modifiers {}
+     {:id :goldene-gabel :money 1500.0 :prestige 0.0 :interior :classic :market-modifiers {}
       :effects [{:kind :rats :utility -0.20 :ticks-left 1}]
       :dishes [{:id :classic :pommes {:size :large :seasoning :salt} :topping :ketchup-mayo :price 4.80}
                {:id :kids :pommes {:size :small :seasoning :salt} :topping :ketchup :price 3.80}
                {:id :sate :pommes {:size :large :seasoning :pommesgewuerz} :topping :sate :price 6.50}]}
-     {:id :pommes-lab :money 20.0 :prestige 0.0 :interior :modern :market-modifiers {} :effects []
+     {:id :pommes-lab :money 1500.0 :prestige 0.0 :interior :modern :market-modifiers {} :effects []
       :dishes [{:id :micro-special :pommes {:size :small :seasoning :pommesgewuerz} :topping :special :price 9.00}
                {:id :sate-edition :pommes {:size :small :seasoning :pommesgewuerz} :topping :sate :price 8.50}
                {:id :normal-ketchup :pommes {:size :small :seasoning :salt} :topping :ketchup :price 4.50}]}]}
@@ -1280,8 +1377,8 @@
     (select-keys (assoc (:last-tick player) :money (:money player))
                  [:money :sales :revenue :profit :demographic-sales])))
 
-(defn million-city-state [state]
-  (assoc-in state [:city :initial-population] 1000000))
+(defn late-city-state [state]
+  (update state :city demographics-simulation/evolve-city 20160))
 
 (defn compare-action-example [sample-state action-id target-player-id]
   (let [without-effect (simulate-tick sample-state)

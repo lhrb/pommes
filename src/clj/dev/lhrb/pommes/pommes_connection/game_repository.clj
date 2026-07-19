@@ -4,6 +4,7 @@
    [clojure.string :as str]
    [dev.lhrb.pommes.pommes-connection.demographics-simulation :as demographics-simulation]
    [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
+   [dev.lhrb.pommes.pommes-connection.game-rules :as game-rules]
    [next.jdbc :as jdbc]
    [next.jdbc.result-set :as rs])
   (:import
@@ -67,13 +68,11 @@
   (loop []
     (let [game-token (new-token)
           invite-token (new-token)
-          next-tick-at (+ (System/currentTimeMillis)
-                          (* 1000 (get-in game-data/game-data [:rules :tick-seconds])))
           game (try
                  (let [row (jdbc/execute-one! connectable
-                                               ["INSERT INTO games (name, game_token, invite_token, next_tick_at)
-                                                 VALUES (?, ?, ?, ?) RETURNING id"
-                                                name game-token invite-token next-tick-at]
+                                               ["INSERT INTO games (name, game_token, invite_token)
+                                                 VALUES (?, ?, ?) RETURNING id"
+                                                name game-token invite-token]
                                                query-options)]
                    {:id (:id row) :name name :game-token game-token :invite-token invite-token})
                  (catch java.sql.SQLException error
@@ -96,7 +95,8 @@
                      ["INSERT INTO game_players
                        (game_id, player_id, player_name, money, prestige, interior, active_effects)
                        VALUES (?, ?, ?, ?, ?, ?, ?)"
-                      game-id player-id player-name (double (or money 20.0))
+                      game-id player-id player-name
+                      (double (or money (get-in game-data/game-data [:economy :starting-money])))
                       (double (or prestige 0.0)) (name interior)
                       (encode (or effects []))]
                      query-options)
@@ -144,6 +144,8 @@
                                                       :game-id (:id game)
                                                       :player-id player-id
                                                       :player-name player-name))]
+      (jdbc/execute-one! tx ["UPDATE games SET host_game_player_id = ? WHERE id = ?"
+                             game-player-id (:id game)] query-options)
       (assoc game :game-player-id game-player-id))))
 
 (defn join-game-with-player!
@@ -151,11 +153,17 @@
   (jdbc/with-transaction [tx datasource]
     (enable-foreign-keys! tx)
     (let [game (jdbc/execute-one! tx
-                                  ["SELECT id, name, game_token, invite_token FROM games WHERE invite_token = ?"
+                                  ["SELECT games.id, games.name, games.game_token, games.invite_token,
+                                           games.status, count(game_players.id) AS player_count
+                                      FROM games LEFT JOIN game_players ON game_players.game_id = games.id
+                                      WHERE games.invite_token = ? GROUP BY games.id"
                                    (normalize-token invite-token)]
                                   query-options)]
       (cond
         (nil? game) {:error :game-not-found}
+        (not= "waiting" (:status game)) {:error :game-started :game game}
+        (>= (:player-count game) (get-in game-data/game-data [:game :player-count]))
+        {:error :game-full :game game}
         (player-name-in-use? tx (:id game) player-name) {:error :player-name-taken :game game}
         :else (let [player-id (insert-player! tx (:id game) player-name password)
                     game-player-id (add-game-player! tx (assoc (game-data/starter-setup)
@@ -163,6 +171,31 @@
                                                                 :player-id player-id
                                                                 :player-name player-name))]
                 (assoc game :game-player-id game-player-id))))))
+
+(defn start-game!
+  [datasource game-id game-player-id now]
+  (jdbc/with-transaction [tx datasource]
+    (let [game (jdbc/execute-one! tx
+                                  ["SELECT status, host_game_player_id,
+                                           (SELECT count(*) FROM game_players WHERE game_id = games.id) AS player_count
+                                      FROM games WHERE id = ?" game-id]
+                                  query-options)
+          required (get-in game-data/game-data [:game :player-count])
+          next-tick-at (+ now (* 1000 (get-in game-data/game-data [:rules :tick-seconds])))]
+      (cond
+        (nil? game) {:error :game-not-found}
+        (not= game-player-id (:host-game-player-id game)) {:error :not-host}
+        (not= "waiting" (:status game)) {:error :already-started}
+        (not= required (:player-count game)) {:error :player-count :required required}
+        :else
+        (do
+          (jdbc/execute-one! tx
+                             ["UPDATE games
+                                 SET status = 'running', started_at = ?, next_tick_at = ?
+                               WHERE id = ? AND status = 'waiting'"
+                              now next-tick-at game-id]
+                             query-options)
+          {:ok true :next-tick-at next-tick-at})))))
 
 (defn authenticate-player
   [connectable game-token player-name password]
@@ -220,7 +253,9 @@
 (defn load-game-state
   [connectable game-id simulation-config]
   (let [game (jdbc/execute-one! connectable
-                                ["SELECT id, tick, market_state, city_state, next_tick_at FROM games WHERE id = ?" game-id]
+                                ["SELECT id, tick, status, market_state, city_state, next_tick_at,
+                                         host_game_player_id, started_at, finished_at
+                                    FROM games WHERE id = ?" game-id]
                                 query-options)]
     (when-not game
       (throw (ex-info "Game does not exist" {:game-id game-id})))
@@ -232,6 +267,8 @@
       (merge simulation-config
              {:game-id game-id
               :tick (:tick game)
+              :game-status (keyword (:status game))
+              :host-game-player-id (:host-game-player-id game)
               :next-tick-at (:next-tick-at game)
               :market (decode (:market-state game))
               :city (if-let [city-state (:city-state game)]
@@ -270,7 +307,9 @@
                            query-options)]
     (when game-player
       (let [game (jdbc/execute-one! connectable
-                                    ["SELECT id, name, tick, city_state, next_tick_at FROM games WHERE id = ?" game-id]
+                                    ["SELECT id, name, tick, status, city_state, next_tick_at,
+                                             host_game_player_id, started_at, finished_at
+                                        FROM games WHERE id = ?" game-id]
                                     query-options)
             players (jdbc/execute! connectable
                                   ["SELECT game_players.id, game_players.player_name,
@@ -289,7 +328,7 @@
                                              LIMIT 1"
                                             game-id]
                                            query-options)]
-        {:game game
+        {:game (update game :status keyword)
          :viewer {:id (:id game-player)
                   :name (:player-name game-player)
                   :money (:money game-player)
@@ -310,6 +349,7 @@
                            :game-stats (decode (:game-stats player))
                            :regulars (load-regulars connectable (:id player))
                            :research (load-research connectable (:id player))
+                           :black-market (load-black-market connectable (:id player))
                            :dishes (load-dishes connectable (:id player))})
                         players)
          :city (if-let [city-state (:city-state game)]
@@ -347,13 +387,16 @@
 
 (defn game-by-invite-token [connectable invite-token]
   (jdbc/execute-one! connectable
-                     ["SELECT name, invite_token FROM games WHERE invite_token = ?"
+                     ["SELECT games.name, games.invite_token, games.status,
+                              count(game_players.id) AS player_count
+                         FROM games LEFT JOIN game_players ON game_players.game_id = games.id
+                         WHERE games.invite_token = ? GROUP BY games.id"
                       (normalize-token invite-token)]
                      query-options))
 
 (defn game-by-token [connectable game-token]
   (jdbc/execute-one! connectable
-                     ["SELECT name, game_token FROM games WHERE game_token = ?"
+                     ["SELECT name, game_token, status FROM games WHERE game_token = ?"
                       (normalize-token game-token)]
                      query-options))
 
@@ -366,6 +409,12 @@
                                     query-options)]
       (when-not player
         (throw (ex-info "Game player does not exist" {:game-player-id game-player-id})))
+      (when (= "finished" (:status (jdbc/execute-one! tx
+                                                       ["SELECT games.status FROM games
+                                                          JOIN game_players ON game_players.game_id = games.id
+                                                         WHERE game_players.id = ?" game-player-id]
+                                                       query-options)))
+        (throw (ex-info "Game is finished" {:game-player-id game-player-id})))
       (jdbc/execute-one! tx
                          ["UPDATE game_players SET interior = ? WHERE id = ?"
                           (name (:interior setup)) game-player-id]
@@ -385,29 +434,21 @@
                            query-options)))))
 
 (defn action-cost
-  [action last-revenue money]
-  (let [{:keys [minimum]}
-        (get-in game-data/game-data [:actions :cost])
-        {:keys [income-multiplier cash-ratio]}
-        (:cost action)]
-    (/ (Math/round (* 100.0
-                      (max (double minimum)
-                           (* (double income-multiplier)
-                              (double (or last-revenue 0.0)))
-                           (* (double cash-ratio)
-                              (double (or money 0.0))))))
-       100.0)))
+  [action tick _money]
+  (game-rules/action-cost game-data/game-data action (long (or tick 0))))
 
-(defn progression-cost [cost level]
-  (let [{:keys [base multiplier]} cost]
-    (/ (Math/round (* 100.0 (double base) (Math/pow (double multiplier) (long level)))) 100.0)))
+(defn progression-cost [system level]
+  (game-rules/progression-cost game-data/game-data system level))
 
 (defn research-cost [level]
-  (progression-cost (get-in game-data/game-data [:research :cost]) level))
+  (progression-cost :research level))
 
 (defn research-statuses
   [connectable game-id game-player-id money]
   (let [levels (load-research connectable game-player-id)
+        running? (= "running" (:status (jdbc/execute-one! connectable
+                                                           ["SELECT status FROM games WHERE id = ?" game-id]
+                                                           query-options)))
         maximum-level (get-in game-data/game-data [:research :cost :maximum-level])
         leaders (into {}
                       (for [[research-id _] (game-data/research-items)]
@@ -430,9 +471,9 @@
                                         query-options)]))]
     (mapv (fn [[research-id item]]
             (let [level (long (get levels research-id 0))
-                  cost (research-cost level)]
+                  cost (or (research-cost level) 0.0)]
               (assoc item :level level :cost cost :maximum-level maximum-level
-                     :available? (and (< level maximum-level) (>= (double money) cost))
+                     :available? (and running? (< level maximum-level) (>= (double money) cost))
                      :leaders (get leaders research-id))))
           (game-data/research-items))))
 
@@ -443,12 +484,15 @@
     (let [item (game-data/research-item research-id)
           maximum-level (get-in game-data/game-data [:research :cost :maximum-level])
           player (jdbc/execute-one! tx
-                                    ["SELECT id, money FROM game_players WHERE id = ?" game-player-id]
+                                    ["SELECT game_players.id, game_players.money, games.status
+                                       FROM game_players JOIN games ON games.id = game_players.game_id
+                                      WHERE game_players.id = ?" game-player-id]
                                     query-options)
           level (long (get (load-research tx game-player-id) research-id 0))
           cost (research-cost level)]
       (cond
         (nil? player) {:error :player-not-found}
+        (not= "running" (:status player)) {:error :game-not-running}
         (nil? item) {:error :unknown-research}
         (>= level maximum-level) {:error :maximum-level}
         (< (double (:money player)) cost) {:error :insufficient-funds :cost cost}
@@ -470,15 +514,18 @@
               {:ok true :cost cost :level (inc level)})))))))
 
 (defn black-market-statuses
-  [connectable game-player-id money]
+  [connectable game-id game-player-id money]
   (let [levels (load-black-market connectable game-player-id)
         config (:black-market game-data/game-data)
+        running? (= "running" (:status (jdbc/execute-one! connectable
+                                                           ["SELECT status FROM games WHERE id = ?" game-id]
+                                                           query-options)))
         maximum-level (get-in config [:cost :maximum-level])]
     (mapv (fn [[item-id item]]
             (let [level (long (get levels item-id 0))
-                  cost (progression-cost (:cost config) level)]
+                  cost (or (progression-cost :black-market level) 0.0)]
               (assoc item :level level :cost cost :maximum-level maximum-level
-                     :available? (and (< level maximum-level) (>= (double money) cost)))))
+                     :available? (and running? (< level maximum-level) (>= (double money) cost)))))
           (game-data/black-market-items))))
 
 (defn purchase-black-market!
@@ -488,12 +535,15 @@
     (let [item (game-data/black-market-item item-id)
           config (:black-market game-data/game-data)
           maximum-level (get-in config [:cost :maximum-level])
-          player (jdbc/execute-one! tx ["SELECT id, money FROM game_players WHERE id = ?" game-player-id]
+          player (jdbc/execute-one! tx ["SELECT game_players.id, game_players.money, games.status
+                                           FROM game_players JOIN games ON games.id = game_players.game_id
+                                          WHERE game_players.id = ?" game-player-id]
                                     query-options)
           level (long (get (load-black-market tx game-player-id) item-id 0))
-          cost (progression-cost (:cost config) level)]
+          cost (progression-cost :black-market level)]
       (cond
         (nil? player) {:error :player-not-found}
+        (not= "running" (:status player)) {:error :game-not-running}
         (nil? item) {:error :unknown-item}
         (>= level maximum-level) {:error :maximum-level}
         (< (double (:money player)) cost) {:error :insufficient-funds :cost cost}
@@ -528,23 +578,21 @@
 
 (defn action-statuses
   [connectable game-id game-player-id tick money]
-  (let [last-revenue (or (last-player-revenue connectable game-id game-player-id) 0.0)
-        latest-use (into {}
-                         (map (juxt #(keyword (:action-id %)) :purchase-tick))
-                         (jdbc/execute! connectable
-                                        ["SELECT action_id, max(purchase_tick) AS purchase_tick
-                                          FROM game_action_uses
-                                          WHERE actor_game_player_id = ?
-                                          GROUP BY action_id"
-                                         game-player-id]
-                                        query-options))]
+  (let [window (get-in game-data/game-data [:game :action-window-ticks])
+        limit (get-in game-data/game-data [:game :actions-per-window])
+        game (jdbc/execute-one! connectable ["SELECT status FROM games WHERE id = ?" game-id] query-options)
+        used (:count (jdbc/execute-one! connectable
+                                        ["SELECT count(*) AS count FROM game_action_uses
+                                          WHERE actor_game_player_id = ? AND purchase_tick > ?"
+                                         game-player-id (- tick window)]
+                                        query-options))
+        available? (and (= "running" (:status game)) (< used limit))]
     (mapv (fn [[action-id action]]
-            (let [available-at (+ (long (get latest-use action-id -1000000))
-                                  (:cooldown action))]
+            (let [cost (action-cost action tick money)]
               (assoc action
-                     :cost (action-cost action last-revenue money)
-                     :available-at-tick available-at
-                     :available? (<= available-at tick))))
+                     :cost cost
+                     :uses-left (max 0 (- limit used))
+                     :available? (and available? (>= (double money) cost)))))
           (game-data/actions))))
 
 (defn purchase-action!
@@ -556,7 +604,7 @@
     (let [action (game-data/action action-id)
           actor (jdbc/execute-one! tx
                                    ["SELECT game_players.id, game_players.game_id,
-                                            game_players.money, games.tick
+                                            game_players.money, games.tick, games.status
                                      FROM game_players JOIN games ON games.id = game_players.game_id
                                      WHERE game_players.id = ?"
                                     actor-game-player-id]
@@ -567,26 +615,24 @@
                                        target-game-player-id (:game-id actor)]
                                       query-options))]
       (cond
-        (nil? actor) {:error :actor-not-found}
+          (nil? actor) {:error :actor-not-found}
+        (not= "running" (:status actor)) {:error :game-not-running}
         (nil? action) {:error :unknown-action}
         (nil? target) {:error :invalid-target}
         (and (= :other-player (:target action))
              (= actor-game-player-id target-game-player-id)) {:error :invalid-target}
         :else
         (let [tick (:tick actor)
-              latest-use (jdbc/execute-one! tx
-                                            ["SELECT max(purchase_tick) AS purchase_tick
-                                              FROM game_action_uses
-                                              WHERE actor_game_player_id = ? AND action_id = ?"
-                                             actor-game-player-id (name action-id)]
-                                            query-options)
-              available-at (+ (long (or (:purchase-tick latest-use) -1000000))
-                              (:cooldown action))
-              cost (action-cost action
-                                (last-player-revenue tx (:game-id actor) actor-game-player-id)
-                                (:money actor))]
+              window (get-in game-data/game-data [:game :action-window-ticks])
+              limit (get-in game-data/game-data [:game :actions-per-window])
+              used (:count (jdbc/execute-one! tx
+                                              ["SELECT count(*) AS count FROM game_action_uses
+                                                WHERE actor_game_player_id = ? AND purchase_tick > ?"
+                                               actor-game-player-id (- tick window)]
+                                              query-options))
+              cost (action-cost action tick (:money actor))]
           (cond
-            (> available-at tick) {:error :cooldown :available-at-tick available-at}
+            (>= used limit) {:error :action-limit}
             (< (double (:money actor)) cost) {:error :insufficient-funds :cost cost}
             :else
             (let [apply-at-tick (inc tick)
@@ -611,7 +657,7 @@
 (defn load-due-action-uses
   [connectable game-id apply-at-tick]
   (jdbc/execute! connectable
-                 ["SELECT id, actor_game_player_id, target_game_player_id, action_id
+                 ["SELECT id, actor_game_player_id, target_game_player_id, action_id, cost
                    FROM game_action_uses
                    WHERE game_id = ? AND apply_at_tick = ?
                    ORDER BY id"
@@ -623,25 +669,32 @@
   (mapv :id
         (jdbc/execute! connectable
                        ["SELECT id FROM games
-                         WHERE next_tick_at <= ?
+                         WHERE status = 'running' AND next_tick_at <= ? AND tick < ?
                          ORDER BY next_tick_at, id"
-                        now]
+                        now (get-in game-data/game-data [:game :duration-ticks])]
                        query-options)))
 
 (defn game-due?
   [connectable game-id now]
   (boolean
    (jdbc/execute-one! connectable
-                      ["SELECT id FROM games WHERE id = ? AND next_tick_at <= ?"
-                       game-id now]
+                      ["SELECT id FROM games
+                        WHERE id = ? AND status = 'running' AND next_tick_at <= ? AND tick < ?"
+                       game-id now (get-in game-data/game-data [:game :duration-ticks])]
                       query-options)))
 
 (defn persist-tick!
   [connectable state summary events]
-  (jdbc/execute-one! connectable
-                     ["UPDATE games SET tick = ?, market_state = ?, city_state = ?, next_tick_at = ? WHERE id = ?"
+  (let [finished? (>= (:tick state) (get-in state [:game :duration-ticks]))]
+    (jdbc/execute-one! connectable
+                     ["UPDATE games
+                         SET tick = ?, market_state = ?, city_state = ?, next_tick_at = ?,
+                             status = ?, finished_at = CASE WHEN ? THEN ? ELSE finished_at END
+                       WHERE id = ?"
                       (:tick state) (encode (:market state)) (encode (:city state))
-                      (:next-tick-at state) (:game-id state)]
+                      (when-not finished? (:next-tick-at state))
+                      (if finished? "finished" "running") finished? (System/currentTimeMillis)
+                      (:game-id state)]
                      query-options)
   (doseq [player (:players state)]
     (jdbc/execute-one! connectable
@@ -686,7 +739,7 @@
     (jdbc/execute-one! connectable
                        ["INSERT INTO game_events (game_id, tick, kind, message) VALUES (?, ?, ?, ?)"
                         (:game-id state) (:tick state) (name kind) message]
-                       query-options)))
+                       query-options))))
 
 (comment
   ;; (save-setup! datasource game-player-id {:interior :cozy :dishes [...]})

@@ -31,17 +31,33 @@
 (defn retained-count [count loss-rate]
   (long (Math/round (* (long (or count 0)) (- 1.0 (double loss-rate))))))
 
-(defn return-count [count eat-rate satisfaction reliability]
-  (long (Math/round (* (long (or count 0))
-                       (double eat-rate)
-                       (double satisfaction)
-                       (+ 1.0 (double reliability))))))
+(defn- roll [seed]
+  (/ (double (Math/floorMod (long (hash seed)) 1000000)) 1000000.0))
 
-(defn conversion-count [sales satisfaction conversion remaining-capacity]
-  (long (min (max 0 remaining-capacity)
-             (Math/round (* (long (or sales 0))
-                            (double satisfaction)
-                            (double conversion))))))
+(defn- stable-count [expected seed]
+  (let [whole (long (Math/floor expected))
+        remainder (- expected whole)]
+    (+ whole (if (< (roll seed) remainder) 1 0))))
+
+(defn return-count
+  ([count daily-order-rate ticks-per-day satisfaction reliability]
+   (return-count count daily-order-rate ticks-per-day satisfaction reliability :regular-return))
+  ([count daily-order-rate ticks-per-day satisfaction reliability seed]
+   (stable-count (* (long (or count 0))
+                    (/ (double daily-order-rate) (double ticks-per-day))
+                    (double satisfaction)
+                    (+ 1.0 (double reliability)))
+                 seed)))
+
+(defn conversion-count
+  ([sales satisfaction conversion remaining-capacity]
+   (conversion-count sales satisfaction conversion remaining-capacity :regular-conversion))
+  ([sales satisfaction conversion remaining-capacity seed]
+   (long (min (max 0 remaining-capacity)
+              (stable-count (* (long (or sales 0))
+                               (double satisfaction)
+                               (double conversion))
+                            seed)))))
 
 (defn prepare-regulars
   "Applies attrition and returns a player-local map ready for this tick.
@@ -60,8 +76,10 @@
                               satisfaction (satisfaction offer)
                               reliability (research-modifier (:research player) research-items
                                                                :reliability (:topping (:dish offer)))
-                              returns (min retained (return-count retained (:eat-rate demographic)
-                                                                  satisfaction reliability))]
+                              returns (min retained (return-count retained (:daily-order-rate demographic 0.0)
+                                                                  (:ticks-per-day regular-rules 2880)
+                                                                  satisfaction reliability
+                                                                  [(:tick regular-rules) player-id demographic-id :return]))]
                           (assoc-in result [player-id demographic-id]
                                     {:count retained :returns returns :cap cap
                                      :satisfaction satisfaction})))
@@ -84,14 +102,15 @@
                                            (+ 1.0 (research-modifier (:research player) research-items :conversion
                                                                        (:topping (:dish offer)))))
                              added (conversion-count (get normal-sales [(:id player) demographic-id] 0)
-                                                     satisfaction conversion (- cap count))]]
+                                                     satisfaction conversion (- cap count)
+                                                     [(:tick regular-rules) (:id player) demographic-id :conversion])]]
                    [demographic-id (+ count added)]))])))
 
 (comment
   ;; Evaluate these in a REPL while tuning game-data values.
   (def rules {:base-conversion-chance 0.03 :loss-rate 0.001 :maximum-population-share 0.20})
   (def items {:potato-quality {:effect :conversion :maximum-modifier 0.30}})
-  (def demographic {:id :students :population 500 :eat-rate 0.12})
+  (def demographic {:id :students :population 500 :daily-order-rate 0.28})
   (def offer {:dish {:topping :ketchup} :components {:preference-match 0.8}})
   (def player {:id :ada :regulars {:students 50} :research {:potato-quality 10}})
   (def prepared (prepare-regulars rules items [demographic] [player] {[:ada :students] offer}))

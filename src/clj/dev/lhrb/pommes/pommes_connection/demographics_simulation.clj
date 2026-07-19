@@ -1,21 +1,12 @@
 (ns dev.lhrb.pommes.pommes-connection.demographics-simulation)
 
 (def default-city-rules
-  {:initial-population 100
-   :maximum-population 1000000
-   :population-growth-half-life-ticks 1440
-   :demographics-update-every-ticks 60
-   :composition-drift-start-population 937500
+  {:population-anchors [[0 15000] [2880 30000] [11520 70000] [20160 100000]]
+   :demographics-update-every-ticks 720
+   :composition-drift-start-tick 2880
    :minimum-demographic-share 0.05
    :maximum-demographic-share 0.40
    :maximum-share-change 0.01})
-
-(defn half-life-rate
-  [half-life-ticks]
-  (- 1.0
-     (Math/pow 0.5
-               (/ 1.0
-                  (double half-life-ticks)))))
 
 (defn- city-rule
   [city key]
@@ -59,24 +50,36 @@
    (initial-city city 1))
   ([city random-state]
    (let [city (merge default-city-rules city)
-         initial-population (:initial-population city)
+         initial-population (second (first (:population-anchors city)))
          shares (demographic-shares (:demographics city))]
      (-> city
          (with-population initial-population shares)
-         (assoc :random-state (long random-state)
+        (assoc :random-state (long random-state)
+                :demand-carry {}
                 :last-demographics-tick 0
                 :next-demographics-at-tick
                 (:demographics-update-every-ticks city))))))
 
+(defn- smoothstep [value]
+  (* value value (- 3.0 (* 2.0 value))))
+
 (defn next-population
-  "Moves population toward maximum-population over elapsed ticks."
-  [city elapsed-ticks]
-  (let [population (:population city)
-        maximum (city-rule city :maximum-population)
-        rate (half-life-rate (city-rule city :population-growth-half-life-ticks))
-        remaining (* (- maximum population)
-                     (Math/pow (- 1.0 rate) elapsed-ticks))]
-    (long (Math/round (- maximum remaining)))))
+  "Interpolates the configured population anchors at an absolute game tick."
+  [city tick]
+  (let [anchors (vec (city-rule city :population-anchors))
+        [last-tick last-population] (last anchors)]
+    (cond
+      (<= tick (ffirst anchors)) (long (second (first anchors)))
+      (>= tick last-tick) (long last-population)
+      :else
+      (let [[[from-tick from-population] [to-tick to-population]]
+            (first (filter (fn [[[from] [to]]]
+                             (<= from tick to))
+                           (partition 2 1 anchors)))
+            alpha (/ (- (double tick) from-tick) (- to-tick from-tick))
+            eased (smoothstep alpha)]
+        (long (Math/round (+ from-population
+                             (* eased (- to-population from-population)))))))))
 
 (defn- next-random
   [random-state]
@@ -120,11 +123,10 @@
 
 (defn- advance-once
   [city update-tick]
-  (let [elapsed-ticks (- update-tick (:last-demographics-tick city))
-        population (next-population city elapsed-ticks)
+  (let [population (next-population city update-tick)
         shares (demographic-shares (:demographics city))
         [random-state shares]
-        (if (>= population (city-rule city :composition-drift-start-population))
+        (if (>= update-tick (city-rule city :composition-drift-start-tick))
           (drift-shares city shares)
           [(:random-state city) shares])]
     (-> (with-population city population shares)
@@ -144,7 +146,8 @@
 (comment
  (require '[dev.lhrb.pommes.pommes-connection.game-data :as game-data])
 
-  ;; Start a city and inspect its growth over one seven-day game.
+
+ ;; Start a city and inspect its growth over one seven-day game.
  (def city (initial-city (:city game-data/game-data) 42))
  (let [city (initial-city (:city game-data/game-data) 43)]
   (->> (range 0 20161 720)
@@ -154,9 +157,11 @@
                    :population (:population city)
                    :shares (into {}
                                  (map (juxt :id
-                                            #(double (/ (:population %)
-                                                        (:population city))))
+                                            #(int (* 100
+                                                     (double
+                                                      (/ (:population %)
+                                                         (:population city))))))
                                       (:demographics city)))})))))
 
-  ;; The two-day point is about 937,506 inhabitants.
+  ;; The city remains visibly smaller during the development phase.
  (:population (evolve-city city 5760)))

@@ -1,8 +1,16 @@
 (ns dev.lhrb.pommes.pommes-connection.game-data)
 
 (def game-data
-  {:rules
+  {:game
+   {:player-count 3
+    :duration-ticks 20160
+    :score-every-ticks 720
+    :action-window-ticks 1440
+    :actions-per-window 2}
+
+   :rules
    {:tick-seconds 30
+    :ticks-per-day 2880
     :choice-beta 3.5
     :market-memory-alpha 0.10
     :relative-price-cap 0.25
@@ -12,50 +20,67 @@
     :positioning-categories [:budget :mainstream :premium]}
 
    :regulars
-   {:base-conversion-chance 0.03
-    :loss-rate 0.001
+   {:base-conversion-chance 0.02
+    :loss-rate 0.0002
     :maximum-population-share 0.20}
 
+   :economy
+   {:starting-money 1500.0
+    :reference-profit-per-tick {:opening 3.0 :development 6.0 :late 10.0}}
+
+   :prestige
+   {:market-share-pool 2.0
+    :best-dish-pool 2.0
+    :ranking-points [3.0 1.0]
+    :regulars-points [4.0 2.0]
+    :research-branch-pool 1.0
+    :black-market-branch-pool 1.0
+    :audit-penalty 3.0}
+
    :research
-   {:cost {:base 20.0 :multiplier 2.0 :maximum-level 25}
+   {:cost {:income-hours [3 6 12 21 36] :maximum-level 5}
     :items
     {:potato-quality {:id :potato-quality :name "Kartoffelqualität"
                       :description "Der Kartoffelhändler verspricht eine festere Sorte. Er hat dafür einen Stempel."
-                      :effect :conversion :maximum-modifier 0.30}
+                      :effect :concept-quality :maximum-modifier 0.12}
      :fryer {:id :fryer :name "Fritteuse"
               :description "Die Fritteuse hält die Temperatur. Zumindest, wenn man sie nicht dabei beobachtet."
               :effect :conversion :maximum-modifier 0.30}
      :fry-grease {:id :fry-grease :name "Frittierfett"
                    :description "Das Fett wird regelmäßig gewechselt. Der Schichtleiter führt darüber ein Heft."
-                   :effect :reliability :maximum-modifier 0.30}
+                   :effect :ingredient-efficiency :maximum-modifier 0.15}
      :ketchup-recipe {:id :ketchup-recipe :name "Ketchup-Rezept"
                       :description "Das Rezept ist geheim. Drei Leute kennen es, und keiner darf gleichzeitig Urlaub nehmen."
                       :effect :order-value :toppings #{:ketchup :ketchup-mayo :curry-ketchup}
-                      :maximum-modifier 0.30}
+                      :maximum-modifier 0.18}
      :mayo-recipe {:id :mayo-recipe :name "Mayo-Rezept"
                    :description "Die Mayo wird nach Vorschrift gerührt. Die Vorschrift ist älter als die Bude."
                    :effect :order-value :toppings #{:mayo :ketchup-mayo :garlic-sauce}
-                   :maximum-modifier 0.30}}}
+                   :maximum-modifier 0.18}}}
 
    :black-market
-   {:cost {:base 20.0 :multiplier 2.0 :maximum-level 25}
+   {:cost {:income-hours [5 10 20 40 70] :maximum-level 5}
     :tax-rate 0.19
-    :suspicion-gain-per-concealment 0.10
-    :suspicion-decay 0.97
-    :audit-every-ticks 10
-    :base-audit-chance 0.05
-    :maximum-audit-chance 0.55
-    :audit-penalty-ticks 3
+    :suspicion-gain-per-concealment 0.12
+    :suspicion-decay 0.995
+    :audit-every-ticks 720
+    :base-audit-chance 0.04
+    :maximum-audit-chance 0.45
+    :audit-penalty-ticks 720
+    :audit-profit-window-ticks 720
     :items
     {:creative-bookkeeping {:id :creative-bookkeeping :name "Kreative Buchführung"
                             :description "Einnahmen verschwinden zwischen den Zeilen."
-                            :maximum-concealment 0.10}
+                            :effect :concealment
+                            :maximum-concealment 0.25}
      :cash-only-register {:id :cash-only-register :name "Nur-Bar-Kasse"
                            :description "Die Kasse kennt erstaunlich wenig Kartenumsatz."
-                           :maximum-concealment 0.10}
+                           :effect :untaxed-income
+                           :maximum-untaxed-income 0.08}
      :uncle-rudis-accounting {:id :uncle-rudis-accounting :name "Onkel Rudis Buchhaltung"
                                :description "Onkel Rudi findet für alles eine Quittung."
-                               :maximum-concealment 0.10}}}
+                               :effect :audit-protection
+                               :maximum-protection 0.50}}}
 
    :catalog
    {:sizes {:small {:cost 0.55}
@@ -100,9 +125,8 @@
     {:id :send-punks
      :name "Die Punks kommen"
      :target :other-player
-     :duration 12
-     :cooldown 18
-     :cost {:income-multiplier 2.0 :cash-ratio 0.0025}
+     :duration 240
+     :cost {:income-hours 0.5}
      :effects [{:type :demographic-attraction :demographic :students :modifier 0.10}
                {:type :demographic-repulsion :demographic :families :modifier 0.20}
                {:type :demographic-repulsion :demographic :retirees :modifier 0.20}
@@ -111,9 +135,8 @@
     {:id :rocker-meeting
      :name "Motorräder vor der Tür"
      :target :other-player
-     :duration 18
-     :cooldown 18
-     :cost {:income-multiplier 1.0 :cash-ratio 0.0015}
+     :duration 300
+     :cost {:income-hours 0.4}
      :effects [{:type :demographic-attraction :demographic :office-workers :modifier -0.10}
                {:type :demographic-attraction :demographic :students :modifier 0.10}
                {:type :average-order-size :modifier 0.20}
@@ -122,9 +145,8 @@
     {:id :influencer-visit
      :name "Besuch mit Ringlicht"
      :target :any-player
-     :duration 9
-     :cooldown 18
-     :cost {:income-multiplier 0.75 :cash-ratio 0.001}
+     :duration 180
+     :cost {:income-hours 0.35}
      :effects [{:type :demographic-attraction :demographic :yuppies :modifier 0.35}
                {:type :demographic-attraction :demographic :foodies :modifier 0.25}
                {:type :price-tolerance :modifier 0.15}]}
@@ -132,9 +154,8 @@
     {:id :parking-chaos
      :name "Neue Parkplatzordnung"
      :target :other-player
-     :duration 15
-     :cooldown 21
-     :cost {:income-multiplier 1.5 :cash-ratio 0.002}
+     :duration 300
+     :cost {:income-hours 0.5}
      :effects [{:type :demographic-repulsion :demographic :families :modifier 0.25}
                {:type :demographic-repulsion :demographic :retirees :modifier 0.20}
                {:type :global-attraction :modifier -0.10}
@@ -143,9 +164,8 @@
     {:id :review-bomb
      :name "Erfahrungsberichte"
      :target :other-player
-     :duration 9
-     :cooldown 21
-     :cost {:income-multiplier 1.25 :cash-ratio 0.00175}
+     :duration 180
+     :cost {:income-hours 0.4}
      :effects [{:type :demographic-repulsion :demographic :yuppies :modifier 0.25}
                {:type :demographic-repulsion :demographic :foodies :modifier 0.25}
                {:type :global-attraction :modifier -0.10}
@@ -154,14 +174,13 @@
     {:id :neighborhood-festival
      :name "Das Nachbarschaftsfest"
      :target :any-player
-     :duration 12
-     :cooldown 18
-     :cost {:income-multiplier 1.0 :cash-ratio 0.0015}
+     :duration 240
+     :cost {:income-hours 0.4}
      :effects [{:type :global-attraction :modifier 0.10}
                {:type :demographic-attraction :demographic :families :modifier 0.15}
                {:type :average-order-size :modifier 0.10}
                {:type :price-tolerance :modifier 0.10}]}
-    :cost {:minimum 20.0}}
+    :cost {:minimum 50.0}}
 
    :market
    {:price-anchors {:students 4.50
@@ -172,21 +191,20 @@
                     :foodies 7.50}}
 
    :city
-   {:initial-population 100
-    :maximum-population 1000000
-    :population-growth-half-life-ticks 1440
-    :demographics-update-every-ticks 60
-    ;; At tick 5,760 the growth curve has reached roughly 93.75% of capacity.
-    ;; That is where the city starts writing its own demographic story.
-    :composition-drift-start-population 937500
+   {:population-anchors [[0 15000]
+                         [2880 30000]
+                         [11520 70000]
+                         [20160 100000]]
+    :demographics-update-every-ticks 720
+    :composition-drift-start-tick 2880
     :minimum-demographic-share 0.05
     :maximum-demographic-share 0.40
-    :maximum-share-change 0.01
+    :maximum-share-change 0.015
 
     :demographics
     [{:id :students
       :population 500
-      :eat-rate 0.12
+      :daily-order-rate 0.28
       :outside-option-utility 0.48
       :behavior {:topping-variety-strength 0.20
                  :positioning-variety-strength 0.10}
@@ -201,7 +219,7 @@
 
      {:id :families
       :population 350
-      :eat-rate 0.08
+      :daily-order-rate 0.20
       :outside-option-utility 0.50
       :behavior {:topping-variety-strength 0.05
                  :positioning-variety-strength 0.03}
@@ -216,7 +234,7 @@
 
      {:id :yuppies
       :population 180
-      :eat-rate 0.07
+      :daily-order-rate 0.18
       :outside-option-utility 0.52
       :behavior {:topping-variety-strength 0.35
                  :positioning-variety-strength 0.30}
@@ -231,7 +249,7 @@
 
      {:id :office-workers
       :population 300
-      :eat-rate 0.11
+      :daily-order-rate 0.30
       :outside-option-utility 0.50
       :behavior {:topping-variety-strength 0.10
                  :positioning-variety-strength 0.05}
@@ -247,7 +265,7 @@
 
      {:id :retirees
       :population 220
-      :eat-rate 0.09
+      :daily-order-rate 0.20
       :outside-option-utility 0.54
       :behavior {:topping-variety-strength 0.0
                  :positioning-variety-strength 0.0}
@@ -262,7 +280,7 @@
 
      {:id :foodies
       :population 140
-      :eat-rate 0.06
+      :daily-order-rate 0.16
       :outside-option-utility 0.55
       :behavior {:topping-variety-strength 0.30
                  :positioning-variety-strength 0.25}
@@ -277,7 +295,8 @@
        :interior {:classic 0.3 :modern 0.8 :cozy 0.8 :street-food 0.7 :premium 1.0}}}]}})
 
 (defn simulation-config []
-  (select-keys game-data [:rules :regulars :research :black-market :catalog :city :market]))
+  (select-keys game-data [:game :rules :regulars :economy :prestige :research
+                          :black-market :catalog :city :market :actions]))
 
 (defn starter-setup []
   (get-in game-data [:setup :starter]))

@@ -33,11 +33,11 @@
 (defn- active-effects [player]
   (if-let [effects (seq (:effects player))]
     (str/join ", "
-              (map (fn [effect]
-                     (let [action (game-data/action (:action-id effect))]
-                       (str (or (:name action) "Unruhe")
-                            " (" (:ticks-left effect) " Ticks)")))
-                   effects))
+              (for [[action-id action-effects] (group-by :action-id effects)
+                    :let [action (game-data/action action-id)]]
+                (str (or (:name action) "Unruhe")
+                     (when (> (count action-effects) 1) (str " ×" (count action-effects)))
+                     " (noch " (apply max (map :ticks-left action-effects)) " Ticks)")))
     "–"))
 
 (defn- city-panel [city]
@@ -50,14 +50,18 @@
        [:thead [:tr [:th "Gruppe"] [:th.numeric "Einwohner"] [:th.numeric "Stadtanteil"]
                 [:th.numeric "Bestellungen / Tick"]]]
        [:tbody
-        (for [{:keys [id population eat-rate]} (:demographics city)]
+        (for [{:keys [id population daily-order-rate] :as demographic} (:demographics city)]
           [:tr
            [:td (label id)]
            [:td.numeric (quantity population)]
            [:td.numeric (percent (if (pos? (long (or (:population city) 0)))
                                    (/ (double population) (:population city))
                                    0.0))]
-           [:td.numeric (quantity (* (double population) (double eat-rate)))]] )]]])))
+           [:td.numeric (format "%.2f"
+                                (/ (* (double population)
+                                      (double (or daily-order-rate
+                                                  (* 2880.0 (double (or (:eat-rate demographic) 0.0))))))
+                                   2880.0))]] )]]])))
 
 (defn- market-share-panel [city players]
   (layout/panel

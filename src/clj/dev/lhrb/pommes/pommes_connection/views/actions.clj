@@ -19,8 +19,9 @@
   (let [options (targets action viewer players) id (name (:id action))]
     [:article {:id (str "action-" id) :class "offer-card action-card"}
      [:div.offer-card__top (layout/icon (get action-icons (:id action) "nav_action") "") [:div [:h2 (:name action)] [:p.meta (get action-stories (:id action))]]]
-     [:p.meta (str "Wirkt " (* 30 (:duration action)) " Sek. · Pause " (* 30 (:cooldown action)) " Sek.")]
-     [:p [:strong (money (:cost action))] " · " (if (:available? action) "bereit" (str "bereit ab Tick " (:available-at-tick action)))]
+     [:p.meta (format "Wirkt %.1f Std. · %d von 2 Maßnahmen im Zeitfenster frei"
+                      (/ (:duration action) 120.0) (:uses-left action 0))]
+     [:p [:strong (money (:cost action))] " · " (if (:available? action) "bereit" "das Maß ist vorerst voll")]
      [:form {:method "post" :action (str "/games/" (:game-token game) "/actions")
              :hx-post (str "/games/" (:game-token game) "/actions") :hx-target (str "#action-" id) :hx-swap "outerHTML"}
       [:input {:type "hidden" :name "__anti-forgery-token" :value token}] [:input {:type "hidden" :name "action-id" :value id}]

@@ -8,6 +8,7 @@
    [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
    [dev.lhrb.pommes.pommes-connection.game-repository :as game-repository]
    [dev.lhrb.pommes.pommes-connection.game-tick :as game-tick]
+   [dev.lhrb.pommes.pommes-connection.prestige :as prestige]
    [dev.lhrb.pommes.pommes-connection.regulars-simulation :as regulars]
    [dev.lhrb.pommes.pommes-connection.simulation :as simulation]
    [dev.lhrb.pommes.pommes-connection.routes]
@@ -91,12 +92,12 @@
     (is (= (:audit-chance small-revenue) (:audit-chance large-revenue)))
     (is (< 0.05 (:audit-chance large-revenue) 0.55))))
 
-(deftest action-costs-scale-with-income-and-cash
-  (is (= [300000.0 162000.0 112500.0 225000.0 189000.0 162000.0]
-         (mapv #(game-repository/action-cost (game-data/action %) 150000.0 108000000.0)
+(deftest action-costs-scale-with-game-phase
+  (is (= [600.0 480.0 420.0 600.0 480.0 480.0]
+         (mapv #(game-repository/action-cost (game-data/action %) 150000 108000000.0)
                [:send-punks :rocker-meeting :influencer-visit
                 :parking-chaos :review-bomb :neighborhood-festival])))
-  (is (= 20.0
+  (is (= 180.0
          (game-repository/action-cost (game-data/action :send-punks) 0.0 0.0))))
 
 (deftest regulars-are-bounded-and-convert-deterministically
@@ -129,6 +130,10 @@
                             datasource (assoc (game-data/starter-setup)
                                               :game-id game-id :player-id player-id
                                               :player-name "Ada"))
+            _ (jdbc/execute-one! datasource ["UPDATE games SET status = 'running' WHERE id = ?" game-id]
+                                 query-options)
+            _ (jdbc/execute-one! datasource ["UPDATE game_players SET money = 3000 WHERE id = ?" game-player-id]
+                                 query-options)
             purchase (game-repository/purchase-black-market!
                       datasource game-player-id :creative-bookkeeping)
             overview (game-repository/load-player-game-overview datasource game-id game-player-id
@@ -140,9 +145,9 @@
             page-response (handler {:request-method :get
                                     :uri (str "/games/" game-token "/black-market")
                                     :session {:game-token game-token :game-player-id game-player-id}})]
-        (is (= {:ok true :cost 20.0 :level 1} purchase))
+        (is (= {:ok true :cost 1800.0 :level 1} purchase))
         (is (= {:creative-bookkeeping 1} (get-in overview [:viewer :black-market])))
-        (is (= 0.0 (get-in overview [:viewer :money])))
+        (is (= 1200.0 (get-in overview [:viewer :money])))
         (is (= 200 (:status page-response)))
         (is (re-find #"Schwarzmarkt" (:body page-response)))
         (is (re-find #"Kreative Buchführung" (:body page-response)))
@@ -178,12 +183,12 @@
                            shares
                            (mapv #(/ (double (:population %)) (:population before-drift))
                                  (:demographics before-drift)))]
-    (is (= 100 (:population city)))
-    (is (= 937506 (:population after-drift)))
+    (is (= 15000 (:population city)))
+    (is (= 40370 (:population after-drift)))
     (is (= (:population after-drift)
            (reduce + (map :population (:demographics after-drift)))))
     (is (every? #(<= 0.05 % 0.40) shares))
-    (is (<= (apply max share-changes) 0.011))
+    (is (<= (apply max share-changes) 0.016))
     (is (= after-drift repeated))))
 
 (defn- anti-forgery-token [body]
@@ -217,6 +222,36 @@
     (is (every? #(= (* (:sales %) (:price %)) (:revenue %))
                 (filter #(= :purchase (:kind %)) allocations)))))
 
+(deftest fractional-demand-is-carried-between-ticks
+  (let [city {:demand-carry {}
+              :demographics [{:id :locals :population 10 :daily-order-rate 0.25}]}
+        demands (loop [city city count 4 result []]
+                  (if (zero? count)
+                    result
+                    (let [[next-city demographics] (simulation/allocate-city-demand
+                                                    {:ticks-per-day 10} city)]
+                      (recur next-city (dec count)
+                             (conj result (:tick-demand (first demographics)))))))]
+    (is (= [0 0 0 1] demands))))
+
+(deftest prestige-rounds-split-ties-and-reset-the-window
+  (let [config (assoc game-data/game-data :city {:demographics [{:id :locals}]})
+        players [{:id :ada :prestige 0.0 :research {} :black-market {}
+                  :game-stats {:score-window {:sales 10 :regular-sales 2 :profit 20.0
+                                              :dish-sales {:a 10} :demographic-sales {:locals 10}}}}
+                 {:id :bea :prestige 0.0 :research {} :black-market {}
+                  :game-stats {:score-window {:sales 10 :regular-sales 2 :profit 20.0
+                                              :dish-sales {:b 10} :demographic-sales {:locals 10}}}}
+                 {:id :cee :prestige 0.0 :research {} :black-market {}
+                  :game-stats {:score-window {:sales 1 :regular-sales 0 :profit 1.0
+                                              :dish-sales {:c 1} :demographic-sales {:locals 1}}}}]
+        awards (prestige/score-round config players [{:id :locals}])
+        scored (prestige/apply-round players awards 720)]
+    (is (< 0.95 (get-in awards [:ada :demographic-market-share]) 0.96))
+    (is (< 0.95 (get-in awards [:bea :demographic-market-share]) 0.96))
+    (is (pos? (:prestige (first scored))))
+    (is (= prestige/empty-window (get-in (first scored) [:game-stats :score-window])))))
+
 (deftest due-games-catch-up-in-bounded-batches
   (let [database-file (Files/createTempFile "pommes-connection-schedule-" ".db"
                                              (make-array java.nio.file.attribute.FileAttribute 0))
@@ -229,7 +264,7 @@
             now (System/currentTimeMillis)
             tick-millis (* 1000 (get-in simulation-config [:rules :tick-seconds]))]
         (jdbc/execute-one! datasource
-                           ["UPDATE games SET next_tick_at = ? WHERE id = ?"
+                           ["UPDATE games SET status = 'running', next_tick_at = ? WHERE id = ?"
                             (- now (* 2 tick-millis)) game-id]
                            query-options)
         (game-tick/run-due-ticks! datasource now simulation-config 2)
@@ -268,6 +303,10 @@
                                         :pommes {:size :small :seasoning :salt}
                                         :topping :ketchup
                                         :price 4.0}]})]
+        (jdbc/execute-one! datasource
+                           ["UPDATE games SET status = 'running', next_tick_at = ? WHERE id = ?"
+                            (+ (System/currentTimeMillis) 30000) game-id]
+                           query-options)
         (game-repository/save-setup!
          datasource game-player-id
          {:interior :cozy
@@ -365,8 +404,8 @@
                                  :dish-3-topping "special"
                                  :dish-3-price "6.0"}})]
           (is (= 1 (:tick game)))
-          (is (= 100 (:population (edn/read-string (:city-state game)))))
-          (is (= 100 (get-in overview [:city :population])))
+          (is (= 15000 (:population (edn/read-string (:city-state game)))))
+          (is (= 15000 (get-in overview [:city :population])))
           (is (= "cozy" (:interior player)))
           (is (= "Cozy special" (:name dish)))
           (is (= 5.5 (:price dish)))
@@ -451,29 +490,28 @@
                                                    (assoc (game-data/starter-setup)
                                                           :game-id game-id :player-id (second player-ids)
                                                           :player-name "Bea"))
+            _ (jdbc/execute-one! datasource
+                                 ["UPDATE games SET status = 'running', next_tick_at = ?, host_game_player_id = ?
+                                   WHERE id = ?"
+                                  (+ (System/currentTimeMillis) 30000) ada game-id]
+                                 query-options)
+            _ (jdbc/execute-one! datasource ["UPDATE game_players SET money = 10000 WHERE id = ?" ada]
+                                 query-options)
             invalid-punks (game-repository/purchase-action! datasource ada :send-punks ada)
             invalid-rocker (game-repository/purchase-action! datasource ada :rocker-meeting ada)
-            festival-self (game-repository/purchase-action! datasource ada :neighborhood-festival ada)
-            reset-money-after-festival
-            (jdbc/execute-one! datasource ["UPDATE game_players SET money = 20 WHERE id = ?" ada]
-                               query-options)
-            influencer-self (game-repository/purchase-action! datasource ada :influencer-visit ada)
-            reset-money-after-influencer
-            (jdbc/execute-one! datasource ["UPDATE game_players SET money = 20 WHERE id = ?" ada]
-                               query-options)
             purchase (game-repository/purchase-action! datasource ada :send-punks bea)
-            repeat-purchase (game-repository/purchase-action! datasource ada :send-punks bea)]
+            repeat-purchase (game-repository/purchase-action! datasource ada :send-punks bea)
+            over-limit (game-repository/purchase-action! datasource ada :review-bomb bea)]
         (is (= :invalid-target (:error invalid-punks)))
         (is (= :invalid-target (:error invalid-rocker)))
-        (is (= {:ok true :cost 20.0 :apply-at-tick 1} festival-self))
-        (is (= {:ok true :cost 20.0 :apply-at-tick 1} influencer-self))
-        (is (= {:ok true :cost 20.0 :apply-at-tick 1} purchase))
-        (is (= :cooldown (:error repeat-purchase)))
-        (is (= 0.0 (:money (jdbc/execute-one! datasource
+        (is (= {:ok true :cost 180.0 :apply-at-tick 1} purchase))
+        (is (= {:ok true :cost 180.0 :apply-at-tick 1} repeat-purchase))
+        (is (= :action-limit (:error over-limit)))
+        (is (= 9640.0 (:money (jdbc/execute-one! datasource
                                                 ["SELECT money FROM game_players WHERE id = ?" ada]
                                                 query-options))))
         (is (= {:actor-game-player-id ada :target-game-player-id bea
-                :action-id "send-punks" :cost 20.0 :purchase-tick 0 :apply-at-tick 1}
+                :action-id "send-punks" :cost 180.0 :purchase-tick 0 :apply-at-tick 1}
                (select-keys (jdbc/execute-one! datasource
                                                 ["SELECT actor_game_player_id, target_game_player_id, action_id,
                                                          cost, purchase_tick, apply_at_tick
@@ -487,11 +525,44 @@
               events (jdbc/execute! datasource
                                     ["SELECT kind, message FROM game_events WHERE game_id = ? ORDER BY id" game-id]
                                     query-options)]
-          (is (= 4 (count (edn/read-string (:active-effects target)))))
+          (is (= 8 (count (edn/read-string (:active-effects target)))))
           (is (= :demographic-attraction
                  (:type (first (edn/read-string (:active-effects target))))))
           (is (some #(= "action" (:kind %)) events))
           (is (some #(re-find #"Punks.*Bea" (:message %)) events))))
+      (finally
+        (Files/deleteIfExists database-file)))))
+
+(deftest host-starts-exactly-three-player-game-and-final-tick-stops-it
+  (let [database-file (Files/createTempFile "pommes-connection-lifecycle-" ".db"
+                                             (make-array java.nio.file.attribute.FileAttribute 0))
+        datasource (jdbc/get-datasource (str "jdbc:sqlite:" database-file))]
+    (try
+      (migratus/migrate {:store :database :db {:datasource datasource}
+                         :migration-dir "resources/migrations"})
+      (let [created (game-repository/create-game-with-player! datasource "Seven days" "Ada" "secret")
+            early (game-repository/start-game! datasource (:id created) (:game-player-id created) 1000)
+            bea (game-repository/join-game-with-player! datasource (:invite-token created) "Bea" "secret")
+            cee (game-repository/join-game-with-player! datasource (:invite-token created) "Cee" "secret")
+            not-host (game-repository/start-game! datasource (:id created) (:game-player-id cee) 1000)
+            started (game-repository/start-game! datasource (:id created) (:game-player-id created) 1000)]
+        (is (= :player-count (:error early)))
+        (is (:game-player-id bea))
+        (is (= :not-host (:error not-host)))
+        (is (:ok started))
+        (is (= :game-started
+               (:error (game-repository/join-game-with-player!
+                        datasource (:invite-token created) "Dee" "secret"))))
+        (jdbc/execute-one! datasource
+                           ["UPDATE games SET tick = 20159, next_tick_at = 1000 WHERE id = ?" (:id created)]
+                           query-options)
+        (game-tick/run-next-tick! datasource (:id created))
+        (let [game (jdbc/execute-one! datasource
+                                      ["SELECT tick, status, next_tick_at FROM games WHERE id = ?" (:id created)]
+                                      query-options)]
+          (is (= 20160 (:tick game)))
+          (is (= "finished" (:status game)))
+          (is (nil? (:next-tick-at game)))))
       (finally
         (Files/deleteIfExists database-file)))))
 

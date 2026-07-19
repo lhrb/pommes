@@ -85,20 +85,24 @@
      [:div {:class (str "toast toast--" kind)} message]]))
 
 (defn game-hud [game server-now]
-  [:div {:id "game-hud"
-         :data-game-clock true
-         :data-next-tick-at (:next-tick-at game)
-         :data-server-now server-now
-         :x-data (str "gameClock(" server-now "," (:next-tick-at game) ")")
-         :x-init "start()"
-         :hx-get (str "/games/" (:game-token game) "/hud")
-         :hx-trigger "pommes:tick"
-         :hx-target "this"
-         :hx-swap "outerHTML"}
-   [:div.game-header__title
-    [:span "Pommes Connection · Tick " (:tick game) " · "
-     [:span {:x-text "seconds + 's'"} "…"]]
-    [:strong (:name game)]]])
+  (let [running? (= :running (:status game))]
+    [:div (cond-> {:id "game-hud"}
+            running? (merge {:data-game-clock true
+                             :data-next-tick-at (:next-tick-at game)
+                             :data-server-now server-now
+                             :x-data (str "gameClock(" server-now "," (:next-tick-at game) ")")
+                             :x-init "start()"
+                             :hx-get (str "/games/" (:game-token game) "/hud")
+                             :hx-trigger "pommes:tick"
+                             :hx-target "this"
+                             :hx-swap "outerHTML"}))
+     [:div.game-header__title
+      [:span "Pommes Connection · "
+       (case (:status game)
+         :waiting "Die Straße wartet"
+         :finished "Die Woche ist entschieden"
+         (list "Tick " (:tick game) " · " [:span {:x-text "seconds + 's'"} "…"]))]
+      [:strong (:name game)]]]))
 
 (defn game-shell [title game viewer active content server-now]
   [:div.game-shell

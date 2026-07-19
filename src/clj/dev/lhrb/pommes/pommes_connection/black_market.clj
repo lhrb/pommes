@@ -13,9 +13,26 @@
   (reduce + 0.0
           (for [[item-id level] black-market
                 :let [item (get items item-id)]
-                :when item]
+                :when (or (= :concealment (:effect item))
+                          (and (nil? (:effect item)) (:maximum-concealment item)))]
             (* (progress level)
                (double (:maximum-concealment item 0.0))))))
+
+(defn untaxed-income-rate
+  [{:keys [items]} black-market]
+  (reduce + 0.0
+          (for [[item-id level] black-market
+                :let [item (get items item-id)]
+                :when (= :untaxed-income (:effect item))]
+            (* (progress level) (double (:maximum-untaxed-income item 0.0))))))
+
+(defn audit-protection
+  [{:keys [items]} black-market]
+  (reduce + 0.0
+          (for [[item-id level] black-market
+                :let [item (get items item-id)]
+                :when (= :audit-protection (:effect item))]
+            (* (progress level) (double (:maximum-protection item 0.0))))))
 
 (defn audit-roll
   "A reproducible roll in [0, 1), so catch-up ticks stay deterministic."
@@ -44,45 +61,59 @@
   (let [game-stats (or (:game-stats player) {})
         penalty? (penalty-active? game-stats)
         configured-concealment (concealment-rate rules (:black-market player))
+        configured-untaxed-rate (untaxed-income-rate rules (:black-market player))
+        protection (audit-protection rules (:black-market player))
         concealment (if penalty? 0.0 configured-concealment)
+        untaxed-rate (if penalty? 0.0 configured-untaxed-rate)
+        untaxed-income (* (double revenue) untaxed-rate)
         suspicion-before (double (or (:suspicion game-stats) 0.0))
+        risk-rate (+ concealment untaxed-rate)
         suspicion-after-decay (clamp 0.0 1.0
                                      (* (+ suspicion-before
-                                           (* concealment
+                                           (* risk-rate
                                               (double suspicion-gain-per-concealment)))
                                         (double suspicion-decay)))
         audit-check? (and (not penalty?)
                           (pos? (long audit-every-ticks))
                           (zero? (mod (long tick) (long audit-every-ticks))))
-        audit-chance (+ (double base-audit-chance)
-                        (* suspicion-after-decay
-                           (- (double maximum-audit-chance)
-                              (double base-audit-chance))))
+        raw-audit-chance (+ (double base-audit-chance)
+                            (* suspicion-after-decay
+                               (- (double maximum-audit-chance)
+                                  (double base-audit-chance))))
+        audit-chance (* raw-audit-chance (- 1.0 protection))
         audited? (and audit-check? (< (audit-roll (:id player) tick) audit-chance))
         effective-concealment (if audited? 0.0 concealment)
         effective-tax-rate (* (double tax-rate) (if (or penalty? audited?) 2.0 1.0))
         taxable-revenue (* (double revenue) (- 1.0 effective-concealment))
         tax (* taxable-revenue effective-tax-rate)
         tax-avoided (* (double revenue) effective-concealment (double tax-rate))
+        illicit-this-tick (+ tax-avoided untaxed-income)
+        illicit-since-audit (+ (double (:illicit-since-audit game-stats 0.0)) illicit-this-tick)
+        gross-since-audit (+ (double (:gross-profit-since-audit game-stats 0.0)) (max 0.0 (double profit)))
+        audit-fine (if audited? (min illicit-since-audit gross-since-audit) 0.0)
         remaining-penalty (cond
                             audited? (dec (long audit-penalty-ticks))
                             penalty? (dec (long (:audit-penalty-ticks game-stats)))
                             :else 0)
         updated-game-stats (-> game-stats
                                (assoc :suspicion (if audited? 0.0 suspicion-after-decay)
-                                      :audit-penalty-ticks (max 0 remaining-penalty))
+                                      :audit-penalty-ticks (max 0 remaining-penalty)
+                                      :illicit-since-audit (if audit-check? 0.0 illicit-since-audit)
+                                      :gross-profit-since-audit (if audit-check? 0.0 gross-since-audit))
                                (update :audit-count (fnil + 0) (if audited? 1 0))
                                (update :total-tax-paid (fnil + 0.0) tax)
                                (update :total-tax-avoided (fnil + 0.0) tax-avoided))
         receipt (assoc tick-stats
                        :gross-profit (double profit)
-                       :profit (- (double profit) tax)
+                       :profit (- (+ (double profit) untaxed-income) tax audit-fine)
                        :concealment-rate effective-concealment
                        :concealed-revenue (* (double revenue) effective-concealment)
                        :taxable-revenue taxable-revenue
                        :tax-rate effective-tax-rate
                        :tax tax
                        :tax-avoided tax-avoided
+                       :untaxed-income untaxed-income
+                       :audit-fine audit-fine
                        :suspicion (:suspicion updated-game-stats)
                        :audit-chance audit-chance
                        :audited? audited?

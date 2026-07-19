@@ -78,6 +78,8 @@
   (game-repository/load-player-game-overview-by-token datasource game-token game-player-id
                                              game-tick/default-simulation-config))
 
+(declare authorized-data)
+
 (defn- form-values [request]
   {:game-name (some-> (get-in request [:params :game-name]) str/trim)
    :player-name (some-> (get-in request [:params :player-name]) str/trim)
@@ -111,6 +113,21 @@
                              :server-now (System/currentTimeMillis)
                              :hx? (htmx? request)))
       (response/status (response/response "Log in to access this game.") 401))))
+
+(defn- start-game [datasource request]
+  (if-let [data (authorized-data datasource request)]
+    (let [result (game-repository/start-game! datasource
+                                              (get-in data [:game :id])
+                                              (get-in data [:viewer :id])
+                                              (System/currentTimeMillis))]
+      (if (:ok result)
+        (response/redirect (str "/games/" (get-in data [:game :game-token])))
+        (response/status (response/response
+                          (case (:error result)
+                            :not-host "Nur die erste Bude darf die Woche eröffnen."
+                            :player-count "Die Straße wartet auf genau drei Buden."
+                            "Diese Woche ist bereits eröffnet.")) 409)))
+    (response/status (response/response "Log in to access this game.") 401)))
 
 (defn- authorized-data [datasource request]
   (let [game-token (get-in request [:path-params :game-token])
@@ -169,6 +186,9 @@
     (cond
       (nil? data)
       (response/not-found "Game player not found")
+
+      (= :finished (get-in data [:game :status]))
+      (response/status (response/response "Die Woche ist vorbei. Das Menü bleibt, wie es ist.") 409)
 
       :else
       (let [{:keys [form errors setup]} (setup-from-params (:params request))
@@ -239,7 +259,7 @@
                     (player-id (get-in request [:params :target-player-id])))
             fresh (authorized-data datasource request)
             statuses (game-repository/action-statuses datasource (get-in fresh [:game :id]) (get-in fresh [:viewer :id]) (get-in fresh [:game :tick]) (get-in fresh [:viewer :money]))
-            [kind message] (case (:error result) nil ["good" (str "AKTION NOTIERT · TICK " (:apply-at-tick result))] :cooldown ["warning" "NOCH NICHT WIEDER BEREIT"] :insufficient-funds ["error" "NICHT GENUG GELD"] ["error" "DIESE AKTION GEHT HIER NICHT"])]
+            [kind message] (case (:error result) nil ["good" (str "AKTION NOTIERT · TICK " (:apply-at-tick result))] :action-limit ["warning" "ZWEI MASSNAHMEN MÜSSEN FÜR ZWÖLF STUNDEN GENÜGEN"] :insufficient-funds ["error" "NICHT GENUG GELD"] ["error" "DIESE AKTION GEHT HIER NICHT"])]
         (-> (actions-view/mutation {:game (:game fresh) :viewer (:viewer fresh) :players (:players fresh) :actions statuses :anti-forgery-token (:anti-forgery-token request) :action-id (action-id (get-in request [:params :action-id])) :kind kind :message message}) response/response (response/content-type "text/html; charset=utf-8")))
       (response/status (response/response "Log in to access this game.") 401)))
 
@@ -292,7 +312,8 @@
   (if-let [data (authorized-data datasource request)]
     (black-market-view/page (assoc data
                                    :items (game-repository/black-market-statuses
-                                           datasource (get-in data [:viewer :id])
+                                           datasource (get-in data [:game :id])
+                                           (get-in data [:viewer :id])
                                            (get-in data [:viewer :money]))
                                    :notice (black-market-notice (:params request))
                                    :anti-forgery-token (:anti-forgery-token request)
@@ -305,7 +326,8 @@
                     datasource (get-in data [:viewer :id])
                     (some-> (get-in request [:params :item-id]) str keyword))
             fresh (authorized-data datasource request)
-            items (game-repository/black-market-statuses datasource (get-in fresh [:viewer :id]) (get-in fresh [:viewer :money]))
+            items (game-repository/black-market-statuses datasource (get-in fresh [:game :id])
+                                                         (get-in fresh [:viewer :id]) (get-in fresh [:viewer :money]))
             item-id (some-> (get-in request [:params :item-id]) str keyword)
             [kind message] (case (:error result) nil ["good" "BUCHHALTUNG VERBESSERT"] :insufficient-funds ["error" "NICHT GENUG GELD"] :maximum-level ["warning" "AUSGEREIZT"] ["error" "DIESEN AUSBAU GIBT ES NICHT"])]
         (-> (black-market-view/mutation {:game (:game fresh) :viewer (:viewer fresh) :items items :anti-forgery-token (:anti-forgery-token request) :item-id item-id :kind kind :message message}) response/response (response/content-type "text/html; charset=utf-8")))
@@ -346,9 +368,13 @@
       :else
       (let [result (game-repository/join-game-with-player! datasource invite-token (:player-name values)
                                                            (:password values))]
-        (if (= :player-name-taken (:error result))
+        (if (:error result)
           (response/status (access-view/join-page {:game game :form values
-                                                   :errors ["That player name is already in this game."]
+                                                   :errors [(case (:error result)
+                                                              :player-name-taken "Dieser Budenname ist bereits vergeben."
+                                                              :game-full "Drei Buden sind genug für diese Straße."
+                                                              :game-started "Die Woche läuft bereits. Die Tür bleibt zu."
+                                                              "Dieses Spiel nimmt niemanden mehr auf.")]
                                                    :anti-forgery-token (:anti-forgery-token request)}) 400)
           (signed-in-redirect (:game-token result) (:game-player-id result)))))))
 
@@ -395,6 +421,8 @@
       :post (fn [request] (login datasource request))}]
     ["/games/:game-token"
      {:get (fn [request] (player-page datasource request))}]
+    ["/games/:game-token/start"
+     {:post (fn [request] (start-game datasource request))}]
     ["/games/:game-token/hud"
      {:get (fn [request] (game-hud datasource request))}]
     ["/games/:game-token/chronicle"

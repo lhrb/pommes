@@ -169,8 +169,56 @@
       [:p.meta "Noch fehlt der Stadt ein Vorfall, den sie mit ausreichender Gewissheit falsch erzählen kann."])
     (navigation-link game "/chronicle" "Chronik aufschlagen")]))
 
+(def prestige-labels
+  {:demographic-market-share "Marktanteile"
+   :best-selling-dish "Meistverkauftes Gericht"
+   :portions "Portionen"
+   :profit "Gewinn"
+   :regulars "Stammkundschaft"
+   :research-leadership "Forschung"
+   :black-market-leadership "Schwarzmarkt"
+   :actions "Aktionen"
+   :audits "Prüfungen"})
+
+(defn- waiting-panel [game viewer players anti-forgery-token]
+  (layout/panel
+   "panel--yellow"
+   [[:h2 "Die Straße zählt ihre Buden"]
+    [:p (str (count players) " von 3 Buden sind eingetragen. Erst dann darf die Woche beginnen.")]
+    (if (= (:id viewer) (:host-game-player-id game))
+      [:form {:method "post" :action (str "/games/" (:game-token game) "/start")}
+       [:input {:type "hidden" :name "__anti-forgery-token" :value anti-forgery-token}]
+       (layout/button {:disabled (not= 3 (count players))} "Sieben Tage eröffnen")]
+      [:p.meta "Die erste Bude besitzt das amtliche Recht, auf den Knopf zu drücken."])]))
+
+(defn- prestige-panel [viewer]
+  (let [sources (get-in viewer [:game-stats :prestige-by-source])
+        latest (get-in viewer [:game-stats :latest-score-round])]
+    (layout/panel
+     "panel--quiet"
+     [[:h2 "Wofür man dich kennt"]
+      (if (seq sources)
+        [:div.grid.grid--two
+         (for [[source points] (sort-by (comp str key) sources)]
+           (layout/stat-row (get prestige-labels source (name source)) (format "%.1f" (double points))))]
+        [:p.meta "Noch ist dein Ruf ein ordentlich gefaltetes, leeres Blatt."])
+      (when latest
+        [:p.meta (str "Letzte Wertung bei Tick " (:tick latest) ": "
+                      (format "%.1f" (double (:total latest))) " Prestige.")])])))
+
+(defn- finished-panel [players]
+  (let [ranking (sort-by (juxt (comp - :prestige) :name) players)
+        winner (first ranking)]
+    (layout/panel
+     "panel--yellow"
+     [[:h2 "Die Goldene Pommes ist vergeben"]
+      [:p (str (:name winner) " gewinnt mit " (quantity (:prestige winner))
+               " Prestige. Die übrigen Buden erkennen das Ergebnis an, soweit es ihre Würde erlaubt.")]
+      [:ol (for [player ranking]
+             [:li [:strong (:name player)] " · " (quantity (:prestige player)) " Prestige"])]])))
+
 (defn page
-  [{:keys [game viewer players city latest-tick events hx? server-now]}]
+  [{:keys [game viewer players city latest-tick events hx? server-now anti-forgery-token]}]
   (let [viewer-result (viewer-tick-summary latest-tick (:id viewer))
         dishes (when latest-tick (best-selling-dishes players latest-tick (:id viewer)))]
     (-> (layout/game-response
@@ -179,7 +227,10 @@
            [:div [:h1 "Budenlage"] [:p (:name viewer) " hält die Schicht zusammen."]]]
           (let [[kind message] (city-notice viewer-result)]
             (layout/notice kind message))
-          (action-panel game viewer-result)
+          (case (:status game)
+            :waiting (waiting-panel game viewer players anti-forgery-token)
+            :finished (finished-panel players)
+            (action-panel game viewer-result))
           (layout/panel "panel--yellow"
                         [[:div.offer-card__top
                           [:h2 "Budenbericht"]
@@ -199,13 +250,15 @@
                            (dish-result "Meistverkauft in der Stadt" (:town dishes) true)]))
           (demographic-donut city)
           (when latest-tick (profit-chart players latest-tick))
+          (prestige-panel viewer)
           (chronicle-panel game events)
-          (layout/panel "panel--quiet"
-                        [[:h2 "Pinnwand"]
-                         [:p "Ein weiterer Betreiber wird gesucht. Die Stadt behauptet, sie brauche Auswahl; vermutlich braucht sie Gesprächsstoff."]
-                         [:p.invite "Einladungslink: "
-                          [:a {:href (str "/join/" (:invite-token game))}
-                           (str "/join/" (:invite-token game))]]])]
+          (when (= :waiting (:status game))
+            (layout/panel "panel--quiet"
+                          [[:h2 "Pinnwand"]
+                           [:p "Ein weiterer Betreiber wird gesucht. Die Stadt behauptet, sie brauche Auswahl; vermutlich braucht sie Gesprächsstoff."]
+                           [:p.invite "Einladungslink: "
+                            [:a {:href (str "/join/" (:invite-token game))}
+                             (str "/join/" (:invite-token game))]]]))]
          hx? server-now)
         response/response
         (response/content-type "text/html; charset=utf-8"))))
