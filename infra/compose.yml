@@ -1,0 +1,51 @@
+services:
+  app:
+    image: pommes-connection:${IMAGE_TAG:?IMAGE_TAG must be set}
+    env_file: .env
+    restart: unless-stopped
+    volumes:
+      - /opt/pommes/data:/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3333/health"]
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 6
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  caddy:
+    image: caddy:2.10-alpine
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - internal
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  internal:
+
+volumes:
+  caddy-data:
+  caddy-config:

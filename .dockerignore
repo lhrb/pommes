@@ -1,0 +1,11 @@
+.git
+.github
+.clj-kondo
+.cpcache
+.lsp
+.nrepl-port
+data
+log
+target
+test
+infra/.env

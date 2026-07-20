@@ -1,0 +1,60 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    env:
+      IMAGE_NAME: pommes-connection
+      RELEASE: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Clojure
+        uses: DeLaGuardo/setup-clojure@12.5
+        with:
+          cli: 1.12.4.1582
+
+      - name: Run tests
+        run: clojure -M:test
+
+      - name: Build release image
+        run: docker build --tag "$IMAGE_NAME:$RELEASE" .
+
+      - name: Save release image
+        run: docker save "$IMAGE_NAME:$RELEASE" | gzip > "$RELEASE.tar.gz"
+
+      - name: Install SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Copy release to server
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          scp -P "$DEPLOY_PORT" -o StrictHostKeyChecking=accept-new "$RELEASE.tar.gz" "$DEPLOY_USER@$DEPLOY_HOST:/opt/pommes/releases/$RELEASE.tar.gz"
+          scp -P "$DEPLOY_PORT" -o StrictHostKeyChecking=accept-new infra/compose.yml infra/Caddyfile infra/deploy.sh "$DEPLOY_USER@$DEPLOY_HOST:/opt/pommes/"
+
+      - name: Activate release
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: ssh -p "$DEPLOY_PORT" -o StrictHostKeyChecking=accept-new "$DEPLOY_USER@$DEPLOY_HOST" "chmod 750 /opt/pommes/deploy.sh && /opt/pommes/deploy.sh $RELEASE"

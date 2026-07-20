@@ -1,0 +1,7 @@
+[Unit]
+Description=Back up the Pommes Connection SQLite database
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/pommes/backup-db.sh

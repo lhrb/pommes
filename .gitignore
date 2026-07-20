@@ -6,3 +6,4 @@
 log/
 .nrepl-port
 /log/
+infra/.env

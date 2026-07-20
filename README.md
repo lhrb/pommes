@@ -14,6 +14,26 @@ and database readiness.
 By default, SQLite stores its database at `data/pommes-connection.db`. Set
 `DATABASE_URL` to use another JDBC URL.
 
+## Production deployment
+
+Production runs on a single Ubuntu 24.04 server using Docker Compose and
+Caddy. Run the bootstrap once from a checked-out repository as the SSH user
+that GitHub Actions will use:
+
+```sh
+sudo ./infra/setup-server.sh
+```
+
+Log in again, edit `/opt/pommes/.env`, and set `DOMAIN` and `ACME_EMAIL`. Point
+the domain's A/AAAA records at the server before the first deploy. The script
+generates and stores the session key, configures UFW for SSH/HTTP/HTTPS, and
+enables daily local SQLite backups under `/opt/pommes/backups`.
+
+The deploy workflow runs tests, builds an image for each `main` commit, copies
+it to the server, and activates it with `/opt/pommes/deploy.sh`. Configure
+these GitHub Actions secrets: `DEPLOY_HOST`, `DEPLOY_PORT`, `DEPLOY_USER`, and
+`DEPLOY_SSH_KEY`. `DEPLOY_USER` must be the user that ran the bootstrap script.
+
 System configuration is available under `resources/system.edn`.
 
 ## Game data
