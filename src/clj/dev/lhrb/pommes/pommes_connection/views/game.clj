@@ -201,11 +201,11 @@
         [:div.grid.grid--two
          (for [[source points] (sort-by (comp str key) sources)]
            (layout/stat-row (get prestige-labels source (name source))
-                            (layout/number (format "%.1f" (double points)))))]
+                            (layout/number points)))]
         [:p.meta "Noch ist dein Ruf ein ordentlich gefaltetes, leeres Blatt."])
       (when latest
         [:p.meta (str "Letzte Wertung bei Tick " (:tick latest) ": "
-                      (format "%.1f" (double (:total latest))) " Prestige.")])])))
+                      (:total latest) " Prestige.")])])))
 
 (defn- finished-panel [players]
   (let [ranking (sort-by (juxt (comp - :prestige) :name) players)

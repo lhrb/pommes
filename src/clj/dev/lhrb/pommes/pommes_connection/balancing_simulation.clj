@@ -52,13 +52,13 @@
                              :strategy strategy
                              :activity activity
                              :money starting-money
-                             :prestige 0.0
+                             :prestige 0
                              :effects [] :market-modifiers {}
                              :regulars {} :research {} :black-market {}
                              :game-stats {}}
                             (with-dish-ids (get menu-profiles
-                                                 (nth [:students :families :premium] index))
-                                           (keyword (str "bude-" (inc index))))))
+                                                (nth [:students :families :premium] index))
+                              (keyword (str "bude-" (inc index))))))
                    (range) agents)}))))
 
 (defn- decision-due? [tick activity player-index]
@@ -121,12 +121,12 @@
                           (= target-id (:id candidate))
                           (update :effects into
                                   (mapv #(assoc % :ticks-left (:duration action)
-                                                  :action-id action-id
-                                                  :action-use-id use-id
-                                                  :actor-player-id player-id
-                                                  :target-player-id target-id
-                                                  :action-cost cost
-                                                  :target-strength 1.25)
+                                                :action-id action-id
+                                                :action-use-id use-id
+                                                :actor-player-id player-id
+                                                :target-player-id target-id
+                                                :action-cost cost
+                                                :target-strength 1.25)
                                         (:effects action)))))
                       players))))))
 
@@ -190,20 +190,27 @@
          seed 1 ticks 20160}}]
   (let [report-at (conj #{2880 11520 ticks}
                         (get-in game-data/game-data [:game :score-every-ticks]))]
-    (loop [state (initial-state agents seed) history [] leaders []]
+    (loop [state (initial-state agents seed)
+           history []
+           previous-leader nil
+           leader-changes 0]
       (if (>= (:tick state) ticks)
         (let [ranking (sort-by (juxt (comp - :prestige) :id) (:players state))]
           {:seed seed :agents agents :history (conj history (snapshot state))
-           :leaders leaders :leader-changes (count (partition-by identity leaders))
+           :leader-changes leader-changes
            :winner (select-keys (first ranking) [:id :strategy :activity :prestige])
            :final-state state})
         (let [prepared (decisions state)
               next (action-simulation/simulate-tick prepared)
-              leader (:id (first (sort-by (juxt (comp - :prestige) :id) (:players next))))
+              leader (->> (:players next)
+                          (apply max-key :prestige)
+                          :id)
+              changed? (and previous-leader
+                            (not= previous-leader leader))
               history (if (or (contains? report-at (:tick next))
                               (zero? (mod (:tick next) 720)))
                         (conj history (snapshot next)) history)]
-          (recur next history (conj leaders leader)))))))
+          (recur next history leader (cond-> leader-changes changed? inc)))))))
 
 (defn run-suite
   [{:keys [seeds] :or {seeds (range 1 31)}}]
@@ -235,10 +242,15 @@
 
 (comment
   ;; One quick game while changing population, appetite, or costs.
-  (def one-week (run-game {:seed 42}))
+ (def one-week (run-game {:seed 42}))
   (-> one-week :history last)
+  (def l (-> one-week :history last))
 
-  ;; Compare two, four, and eight daily decisions.
+  (time (run-game {:seed 42}))
+
+  (map #(select-keys % [:prestige :strategy :activity]) (:players l))
+
+;; Compare two, four, and eight daily decisions.
   (for [activity activity-levels]
     (:winner (run-game {:seed activity
                         :agents (mapv #(hash-map :strategy % :activity activity)

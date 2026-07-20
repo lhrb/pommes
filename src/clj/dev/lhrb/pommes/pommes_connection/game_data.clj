@@ -29,13 +29,13 @@
     :reference-profit-per-tick {:opening 3.0 :development 6.0 :late 10.0}}
 
    :prestige
-   {:market-share-pool 2.0
-    :best-dish-pool 2.0
-    :ranking-points [3.0 1.0]
-    :regulars-points [4.0 2.0]
-    :research-branch-pool 1.0
-    :black-market-branch-pool 1.0
-    :audit-penalty 3.0}
+   {:market-share-pool 2
+    :best-dish-pool 2
+    :ranking-points [3 1]
+    :regulars-points [4 2]
+    :research-branch-pool 1
+    :black-market-branch-pool 1
+    :audit-penalty 3}
 
    :research
    {:cost {:income-hours [3 6 12 21 36] :maximum-level 5}

@@ -10,7 +10,7 @@
                (< ratio 1.0) 1.0
                (< ratio 2.0) 2.0
                :else 3.0)]
-    (min 4.0 (* base (double target-strength)))))
+    (long (Math/round (min 4.0 (* base (double target-strength)))))))
 
 (defn- action-uses
   [state]
@@ -58,7 +58,7 @@
                               value (+ previous marginal)
                               award (if expires?
                                       (action-prestige value action-cost (or target-strength 1.0))
-                                      0.0)]
+                                      0)]
                           (cond-> (assoc-in player [:game-stats :action-values action-use-id]
                                             {:action-id action-id :target-player-id target-player-id
                                              :cost action-cost :value value})
@@ -66,9 +66,9 @@
                             expires? (assoc-in [:game-stats :latest-action-result]
                                                {:action-id action-id :target-player-id target-player-id
                                                 :cost action-cost :value value :prestige award})
-                            (pos? award) (update :prestige (fnil + 0.0) award)
+                            (pos? award) (update :prestige (fnil + 0) award)
                             (pos? award) (update-in [:game-stats :prestige-by-source :actions]
-                                                   (fnil + 0.0) award)))))
+                                                   (fnil + 0) award)))))
                     players)))))
 
 (defn simulate-tick

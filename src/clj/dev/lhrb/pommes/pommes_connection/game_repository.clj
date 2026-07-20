@@ -97,7 +97,7 @@
                        VALUES (?, ?, ?, ?, ?, ?, ?)"
                       game-id player-id player-name
                       (double (or money (get-in game-data/game-data [:economy :starting-money])))
-                      (double (or prestige 0.0)) (name interior)
+                      (long (or prestige 0)) (name interior)
                       (encode (or effects []))]
                      query-options)
   (let [game-player-id

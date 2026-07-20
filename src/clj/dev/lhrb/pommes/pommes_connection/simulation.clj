@@ -995,7 +995,7 @@
 
 (defn update-player
   [prestige-rules player stats]
-  (let [audit-loss (if (:audited? stats) (double (:audit-penalty prestige-rules 0.0)) 0.0)]
+  (let [audit-loss (if (:audited? stats) (long (:audit-penalty prestige-rules 0)) 0)]
     (-> player
       ;; Money changes by tax-adjusted profit, not revenue.
       (update
@@ -1003,7 +1003,7 @@
        (fnil + 0.0)
        (:profit stats))
 
-      (update :prestige #(max 0.0 (- (double (or % 0.0)) audit-loss)))
+      (update :prestige #(max 0 (- (long (or % 0)) audit-loss)))
 
       (assoc
        :last-tick
@@ -1016,7 +1016,7 @@
       (update-in [:game-stats :score-window] prestige/add-window-stats stats)
 
       (cond-> (pos? audit-loss)
-        (update-in [:game-stats :prestige-by-source :audits] (fnil - 0.0) audit-loss))
+        (update-in [:game-stats :prestige-by-source :audits] (fnil - 0) audit-loss))
 
       (update
        :effects
@@ -1341,16 +1341,16 @@
   (merge
    {:tick 0
     :players
-    [{:id :fritza :money 1500.0 :prestige 0.0 :interior :street-food :market-modifiers {} :effects []
+    [{:id :fritza :money 1500.0 :prestige 0 :interior :street-food :market-modifiers {} :effects []
       :dishes [{:id :cheap-ketchup :pommes {:size :small :seasoning :salt} :topping :ketchup :price 3.50}
                {:id :large-mayo :pommes {:size :large :seasoning :pommesgewuerz} :topping :mayo :price 5.20}
                {:id :special :pommes {:size :large :seasoning :pommesgewuerz} :topping :special :price 6.00}]}
-     {:id :goldene-gabel :money 1500.0 :prestige 0.0 :interior :classic :market-modifiers {}
+     {:id :goldene-gabel :money 1500.0 :prestige 0 :interior :classic :market-modifiers {}
       :effects [{:kind :rats :utility -0.20 :ticks-left 1}]
       :dishes [{:id :classic :pommes {:size :large :seasoning :salt} :topping :ketchup-mayo :price 4.80}
                {:id :kids :pommes {:size :small :seasoning :salt} :topping :ketchup :price 3.80}
                {:id :sate :pommes {:size :large :seasoning :pommesgewuerz} :topping :sate :price 6.50}]}
-     {:id :pommes-lab :money 1500.0 :prestige 0.0 :interior :modern :market-modifiers {} :effects []
+     {:id :pommes-lab :money 1500.0 :prestige 0 :interior :modern :market-modifiers {} :effects []
       :dishes [{:id :micro-special :pommes {:size :small :seasoning :pommesgewuerz} :topping :special :price 9.00}
                {:id :sate-edition :pommes {:size :small :seasoning :pommesgewuerz} :topping :sate :price 8.50}
                {:id :normal-ketchup :pommes {:size :small :seasoning :salt} :topping :ketchup :price 4.50}]}]}

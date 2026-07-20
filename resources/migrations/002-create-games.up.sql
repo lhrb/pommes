@@ -12,7 +12,7 @@ CREATE TABLE game_players (
   game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
   player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   money REAL NOT NULL DEFAULT 20.0,
-  prestige REAL NOT NULL DEFAULT 0.0,
+  prestige INTEGER NOT NULL DEFAULT 0,
   interior TEXT NOT NULL,
   active_effects TEXT NOT NULL DEFAULT '[]',
   UNIQUE (game_id, player_id)

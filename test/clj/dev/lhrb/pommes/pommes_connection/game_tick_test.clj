@@ -5,6 +5,7 @@
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]
    [dev.lhrb.pommes.pommes-connection.black-market :as black-market]
+   [dev.lhrb.pommes.pommes-connection.action-simulation :as action-simulation]
    [dev.lhrb.pommes.pommes-connection.demographics-simulation :as demographics-simulation]
    [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
    [dev.lhrb.pommes.pommes-connection.game-repository :as game-repository]
@@ -261,21 +262,64 @@
 
 (deftest prestige-rounds-split-ties-and-reset-the-window
   (let [config (assoc game-data/game-data :city {:demographics [{:id :locals}]})
-        players [{:id :ada :prestige 0.0 :research {} :black-market {}
+        players [{:id :ada :prestige 0 :research {} :black-market {}
                   :game-stats {:score-window {:sales 10 :regular-sales 2 :profit 20.0
                                               :dish-sales {:a 10} :demographic-sales {:locals 10}}}}
-                 {:id :bea :prestige 0.0 :research {} :black-market {}
+                 {:id :bea :prestige 0 :research {} :black-market {}
                   :game-stats {:score-window {:sales 10 :regular-sales 2 :profit 20.0
                                               :dish-sales {:b 10} :demographic-sales {:locals 10}}}}
-                 {:id :cee :prestige 0.0 :research {} :black-market {}
+                 {:id :cee :prestige 0 :research {} :black-market {}
                   :game-stats {:score-window {:sales 1 :regular-sales 0 :profit 1.0
                                               :dish-sales {:c 1} :demographic-sales {:locals 1}}}}]
         awards (prestige/score-round config players [{:id :locals}])
         scored (prestige/apply-round players awards 720)]
-    (is (< 0.95 (get-in awards [:ada :demographic-market-share]) 0.96))
-    (is (< 0.95 (get-in awards [:bea :demographic-market-share]) 0.96))
+    (is (= 1 (get-in awards [:ada :demographic-market-share])))
+    (is (= 1 (get-in awards [:bea :demographic-market-share])))
     (is (pos? (:prestige (first scored))))
     (is (= prestige/empty-window (get-in (first scored) [:game-stats :score-window])))))
+
+(deftest prestige-awards-use-whole-points
+  (let [players [{:id :ada :game-stats {:score-window {:sales 10
+                                                        :dish-sales {:a 10}}}}
+                 {:id :bea :game-stats {:score-window {:sales 10
+                                                        :dish-sales {:b 10}}}}]
+        config {:prestige {:market-share-pool 3
+                           :best-dish-pool 3
+                           :ranking-points [3 1]
+                           :regulars-points []
+                           :research-branch-pool 0
+                           :black-market-branch-pool 0}
+                :research {:items {}}
+                :black-market {:items {}}}
+        awards (prestige/score-round config players [])]
+    (is (= 1 (get-in awards [:ada :best-selling-dish])))
+    (is (= 1 (get-in awards [:bea :best-selling-dish])))
+    (is (= 2 (get-in awards [:ada :portions])))
+    (is (= 2 (get-in awards [:bea :portions])))
+    (is (every? integer? (mapcat vals (vals awards))))))
+
+(deftest proportional-prestige-distributes-only-unambiguous-whole-points
+  (let [config {:prestige {:market-share-pool 2
+                           :best-dish-pool 0
+                           :ranking-points []
+                           :regulars-points []
+                           :research-branch-pool 0
+                           :black-market-branch-pool 0}
+                :research {:items {}}
+                :black-market {:items {}}}
+        players [{:id :ada :game-stats {:score-window {:demographic-sales {:locals 10}}}}
+                 {:id :bea :game-stats {:score-window {:demographic-sales {:locals 1}}}}]
+        tied-players [{:id :ada :game-stats {:score-window {:demographic-sales {:locals 1}}}}
+                      {:id :bea :game-stats {:score-window {:demographic-sales {:locals 1}}}}]]
+    (is (= {:ada {:demographic-market-share 2}}
+           (prestige/score-round config players [{:id :locals}])))
+    (is (= {}
+           (prestige/score-round (assoc-in config [:prestige :market-share-pool] 1)
+                                 tied-players [{:id :locals}])))))
+
+(deftest action-prestige-is-a-whole-number
+  (is (= 3 (action-simulation/action-prestige 150.0 100.0 1.25)))
+  (is (= 4 (action-simulation/action-prestige 300.0 100.0 1.5))))
 
 (deftest due-games-catch-up-in-bounded-batches
   (let [database-file (Files/createTempFile "pommes-connection-schedule-" ".db"
