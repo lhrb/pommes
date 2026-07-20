@@ -1,5 +1,7 @@
 (ns dev.lhrb.pommes.pommes-connection.balancing-simulation
   "Pure seven-day balance experiments for three-player games."
+  (:import
+   [java.util.concurrent Executors])
   (:require
    [dev.lhrb.pommes.pommes-connection.action-simulation :as action-simulation]
    [dev.lhrb.pommes.pommes-connection.demographics-simulation :as demographics]
@@ -11,6 +13,8 @@
   [:adaptive-menu :research :black-market :actions :regulars :hoarder :random])
 
 (def activity-levels [2 4 8])
+
+(def fast-step-ticks 180)
 
 (def menu-profiles
   {:students {:interior :street-food
@@ -180,14 +184,76 @@
                      :sales (reduce + 0 (vals (get-in player [:game-stats :demographic-sales])))
                      :spending (get-in player [:game-stats :spending])
                      :audits (get-in player [:game-stats :audit-count] 0)})
-                  (:players state))})
+                     (:players state))})
+
+(defn- advance-effects [state ticks]
+  (update state :players
+          (fn [players]
+            (mapv (fn [player]
+                    (-> player
+                        (update :effects
+                                (fn [effects]
+                                  (->> effects
+                                       (map (fn [effect]
+                                              (update effect :ticks-left (fnil - 0) ticks)))
+                                       (filter (comp pos? :ticks-left))
+                                       vec)))
+                        (update :game-stats
+                                (fn [stats]
+                                  (update (or stats {}) :audit-penalty-ticks
+                                          (fn [remaining]
+                                            (max 0 (- (long (or remaining 0)) ticks))))))))
+                  players))))
+
+(defn- fast-rules [state ticks]
+  (let [rules (:rules state)
+        regulars (:regulars state)
+        black-market (:black-market state)
+        alpha (double (:market-memory-alpha rules 0.10))
+        decay (double (:suspicion-decay black-market 1.0))
+        decay-over-step (Math/pow decay ticks)
+        gain (double (:suspicion-gain-per-concealment black-market 0.0))
+        scaled-gain (if (or (zero? gain) (= decay 1.0))
+                      (* gain ticks)
+                      (/ (* gain decay (- 1.0 decay-over-step))
+                         (* decay-over-step (- 1.0 decay))))]
+    {:rules (assoc rules
+                   :ticks-per-day (/ (double (:ticks-per-day rules 2880)) ticks)
+                   :market-memory-alpha (- 1.0 (Math/pow (- 1.0 alpha) ticks)))
+     :regulars (assoc regulars
+                      :loss-rate (- 1.0 (Math/pow (- 1.0 (double (:loss-rate regulars 0.0))) ticks)))
+     :black-market (assoc black-market
+                          :suspicion-decay decay-over-step
+                          :suspicion-gain-per-concealment scaled-gain)}))
+
+(defn simulate-fast-ticks
+  "Advances a balance-only approximation by ticks. It preserves the real
+  simulation's rules, but aggregates demand and time-based effects into one
+  call, so it is intentionally not equivalent to repeated live ticks."
+  [state ticks]
+  (let [{:keys [rules regulars black-market]} state
+        scaled (fast-rules state ticks)
+        prepared (-> state
+                     (assoc :tick (+ (:tick state) ticks -1)
+                            :rules (:rules scaled)
+                            :regulars (:regulars scaled)
+                            :black-market (:black-market scaled))
+                     (advance-effects (dec ticks)))
+        next (action-simulation/simulate-tick prepared)]
+    (assoc next :rules rules :regulars regulars :black-market black-market)))
+
+(defn- next-step-size [state ticks mode]
+  (case mode
+    :fast (min fast-step-ticks (- ticks (:tick state)))
+    :exact 1
+    (throw (ex-info "Unknown balancing simulation mode" {:mode mode}))))
 
 (defn run-game
-  [{:keys [agents seed ticks]
+  [{:keys [agents seed ticks mode include-final-state?]
     :or {agents [{:strategy :adaptive-menu :activity 4}
                  {:strategy :research :activity 4}
                  {:strategy :actions :activity 4}]
-         seed 1 ticks 20160}}]
+         seed 1 ticks 20160 mode :fast}}]
   (let [report-at (conj #{2880 11520 ticks}
                         (get-in game-data/game-data [:game :score-every-ticks]))]
     (loop [state (initial-state agents seed)
@@ -196,12 +262,18 @@
            leader-changes 0]
       (if (>= (:tick state) ticks)
         (let [ranking (sort-by (juxt (comp - :prestige) :id) (:players state))]
-          {:seed seed :agents agents :history (conj history (snapshot state))
-           :leader-changes leader-changes
-           :winner (select-keys (first ranking) [:id :strategy :activity :prestige])
-           :final-state state})
+          (cond-> {:seed seed :agents agents
+                   :history (cond-> history
+                              (or (empty? history) (not= (:tick (peek history)) (:tick state)))
+                              (conj (snapshot state)))
+                   :leader-changes leader-changes
+                   :winner (select-keys (first ranking) [:id :strategy :activity :prestige])}
+            include-final-state? (assoc :final-state state)))
         (let [prepared (decisions state)
-              next (action-simulation/simulate-tick prepared)
+              step-size (next-step-size state ticks mode)
+              next (if (= mode :exact)
+                     (action-simulation/simulate-tick prepared)
+                     (simulate-fast-ticks prepared step-size))
               leader (->> (:players next)
                           (apply max-key :prestige)
                           :id)
@@ -213,15 +285,28 @@
           (recur next history leader (cond-> leader-changes changed? inc)))))))
 
 (defn run-suite
-  [{:keys [seeds] :or {seeds (range 1 31)}}]
-  (mapv (fn [seed]
-          (let [offset (mod seed (count strategies))
-                agents (mapv (fn [index]
-                               {:strategy (nth strategies (mod (+ offset index) (count strategies)))
-                                :activity (nth activity-levels (mod (+ seed index) (count activity-levels)))})
-                             (range 3))]
-            (run-game {:agents agents :seed seed})))
-        seeds))
+  [{:keys [seeds mode parallelism include-final-state? ticks]
+    :or {seeds (range 1 31) mode :fast}}]
+  (let [seeds (vec seeds)
+        game-input (fn [seed]
+                     (let [offset (mod seed (count strategies))]
+                       (cond-> {:agents (mapv (fn [index]
+                                                {:strategy (nth strategies (mod (+ offset index) (count strategies)))
+                                                 :activity (nth activity-levels (mod (+ seed index) (count activity-levels)))})
+                                              (range 3))
+                                :seed seed :mode mode
+                                :include-final-state? include-final-state?}
+                         ticks (assoc :ticks ticks))))
+        worker-count (max 1 (min (count seeds)
+                                 (or parallelism (.availableProcessors (Runtime/getRuntime)))))
+        executor (Executors/newFixedThreadPool worker-count)]
+    (try
+      (let [tasks (mapv #(.submit executor ^Callable (reify java.util.concurrent.Callable
+                                                        (call [_] (run-game (game-input %)))))
+                        seeds)]
+        (mapv #(.get %) tasks))
+      (finally
+        (.shutdown executor)))))
 
 (defn suite-report [games]
   {:games (count games)
@@ -241,31 +326,41 @@
     (conj :too-few-leader-changes)))
 
 (comment
-  ;; One quick game while changing population, appetite, or costs.
+  ;; Fast mode is the default while changing population, appetite, or costs.
  (def one-week (run-game {:seed 42}))
-  (-> one-week :history last)
-  (def l (-> one-week :history last))
+ (def one-week-exact (run-game {:seed 42 :mode :exact}))
 
-  (time (run-game {:seed 42}))
+ (-> one-week :history last)
+ (-> one-week-exact :history last)
 
-  (map #(select-keys % [:prestige :strategy :activity]) (:players l))
+ (def l (-> one-week :history last))
 
-;; Compare two, four, and eight daily decisions.
-  (for [activity activity-levels]
-    (:winner (run-game {:seed activity
-                        :agents (mapv #(hash-map :strategy % :activity activity)
-                                      [:adaptive-menu :research :actions])})))
+ (time (run-game {:seed 42}))
+  ;; Confirm a result with the real single-tick simulation.
+ (time (run-game {:seed 42 :mode :exact}))
+
+ (map
+  #(select-keys % [:prestige :strategy :activity])
+  (-> one-week-exact :history last :players))
+
+  ;; Compare two, four, and eight daily decisions.
+ (for [activity activity-levels]
+      (:winner (run-game {:seed activity
+                          :agents (mapv #(hash-map :strategy % :activity activity)
+                                        [:adaptive-menu :research :actions])})))
 
   ;; A coordinated pile-on remains legal: use-action adds another action-use
   ;; even while equivalent effects are already active.
-  (-> (initial-state [{:strategy :actions :activity 8}
-                      {:strategy :actions :activity 8}
-                      {:strategy :hoarder :activity 2}] 7)
-      (use-action :bude-1 :review-bomb)
-      (use-action :bude-2 :review-bomb)
-      :players)
+ (-> (initial-state [{:strategy :actions :activity 8}
+                     {:strategy :actions :activity 8}
+                     {:strategy :hoarder :activity 2}] 7)
+     (use-action :bude-1 :review-bomb)
+     (use-action :bude-2 :review-bomb)
+     :players)
 
-  ;; The full fixed-seed suite is intentionally explicit and may take a while.
-  (def suite (run-suite {:seeds (range 1 31)}))
-  (def report (suite-report suite))
-  (acceptance-failures report))
+  ;; The default suite is fast and parallel. Ask for final state only when debugging.
+ (def suite (run-suite {:seeds (range 1 31)}))
+ (def exact-suite (run-suite {:seeds (range 1 4) :mode :exact :parallelism 1}))
+ (run-game {:seed 42 :include-final-state? true})
+ (def report (suite-report suite))
+ (acceptance-failures report))
