@@ -442,6 +442,10 @@
               actions-response (handler {:request-method :get
                                          :uri (str "/games/" game-token "/actions")
                                          :session {:game-token game-token :game-player-id game-player-id}})
+              actions-content-response (handler {:request-method :get
+                                                 :uri (str "/games/" game-token "/actions/content")
+                                                 :headers {"hx-request" "true"}
+                                                 :session {:game-token game-token :game-player-id game-player-id}})
               stats-response (handler {:request-method :get
                                        :uri (str "/games/" game-token "/stats")
                                        :session {:game-token game-token :game-player-id game-player-id}})
@@ -516,6 +520,12 @@
           (is (re-find #"game-nav__item is-active\" href=\"[^\"]*/dishes\"" (:body htmx-dishes-response)))
           (is (= 200 (:status actions-response)))
           (is (re-find #"Die Punks kommen" (:body actions-response)))
+          (is (re-find #"id=\"actions-content\"" (:body actions-response)))
+          (is (re-find #"2 von 2 Maßnahmen frei" (:body actions-response)))
+          (is (not (re-find #"von 2 Maßnahmen im Zeitfenster frei" (:body actions-response))))
+          (is (= 200 (:status actions-content-response)))
+          (is (re-find #"id=\"actions-content\"" (:body actions-content-response)))
+          (is (not (re-find #"game-screen" (:body actions-content-response))))
           (is (= 200 (:status stats-response)))
           (is (re-find #"Stadtstatistik" (:body stats-response)))
           (is (re-find #"Marktanteile" (:body stats-response)))
@@ -576,6 +586,12 @@
         (is (= {:ok true :cost 18000 :apply-at-tick 1} purchase))
         (is (= {:ok true :cost 18000 :apply-at-tick 1} repeat-purchase))
         (is (= :action-limit (:error over-limit)))
+        (is (= [{:action-id "send-punks" :target-player-name "Bea"
+                 :state :scheduled :available-at-tick 1440}
+               {:action-id "parking-chaos" :target-player-name "Bea"
+                 :state :scheduled :available-at-tick 1440}]
+               (mapv #(select-keys % [:action-id :target-player-name :state :available-at-tick])
+                     (game-repository/action-slots datasource ada 0))))
         (is (= 964000 (:money (jdbc/execute-one! datasource
                                                 ["SELECT money FROM game_players WHERE id = ?" ada]
                                                 query-options))))

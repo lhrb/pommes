@@ -596,6 +596,33 @@
                      :available? (and available? (>= (long money) cost)))))
           (game-data/actions))))
 
+(defn action-slots
+  [connectable game-player-id tick]
+  (let [{:keys [reset-ticks]} (game-rules/action-usage-rules game-data/game-data)]
+    (mapv (fn [{:keys [action-id apply-at-tick] :as action-use}]
+            (let [action (game-data/action (keyword action-id))
+                  effect-ends-at-tick (+ apply-at-tick (:duration action))]
+              (assoc action-use
+                     :action action
+                     :available-at-tick (+ (:purchase-tick action-use) reset-ticks)
+                     :effect-ends-at-tick effect-ends-at-tick
+                     :state (cond
+                              (< tick apply-at-tick) :scheduled
+                              (< tick effect-ends-at-tick) :active
+                              :else :expired))))
+          (jdbc/execute! connectable
+                         ["SELECT game_action_uses.action_id, game_action_uses.purchase_tick,
+                                  game_action_uses.apply_at_tick,
+                                  targets.player_name AS target_player_name
+                             FROM game_action_uses
+                             JOIN game_players AS targets
+                               ON targets.id = game_action_uses.target_game_player_id
+                            WHERE game_action_uses.actor_game_player_id = ?
+                              AND game_action_uses.purchase_tick > ?
+                            ORDER BY game_action_uses.purchase_tick, game_action_uses.id"
+                          game-player-id (- tick reset-ticks)]
+                         query-options))))
+
 (defn purchase-action!
   "Records and queues an action purchase. Returns either {:ok true ...} or
    {:error keyword}. Money, history, and the scheduled action change together."

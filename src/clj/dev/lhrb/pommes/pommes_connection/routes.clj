@@ -241,17 +241,28 @@
     "invalid" ["error" "Diese Aktion oder dieses Ziel ist nicht gültig."]
     nil))
 
+(defn- action-view-data [datasource data]
+  (let [game-id (get-in data [:game :id])
+        game-player-id (get-in data [:viewer :id])
+        tick (get-in data [:game :tick])]
+    (assoc data
+           :actions (game-repository/action-statuses datasource game-id game-player-id tick
+                                                     (get-in data [:viewer :money]))
+           :slots (game-repository/action-slots datasource game-player-id tick))))
+
 (defn- actions-page [datasource request]
   (if-let [data (authorized-data datasource request)]
-    (let [statuses (game-repository/action-statuses datasource (get-in data [:game :id])
-                                                   (get-in data [:viewer :id])
-                                                   (get-in data [:game :tick])
-                                                   (get-in data [:viewer :money]))]
-      (actions-view/page (assoc data
-                                :actions statuses
-                                :notice (action-notice (:params request))
-                                :anti-forgery-token (:anti-forgery-token request)
-                                :hx? (htmx? request))))
+    (actions-view/page (assoc (action-view-data datasource data)
+                              :notice (action-notice (:params request))
+                              :anti-forgery-token (:anti-forgery-token request)
+                              :hx? (htmx? request)))
+    (response/status (response/response "Log in to access this game.") 401)))
+
+(defn- actions-content [datasource request]
+  (if-let [data (authorized-data datasource request)]
+    (-> (actions-view/content (assoc (action-view-data datasource data)
+                                     :anti-forgery-token (:anti-forgery-token request)))
+        h/html str response/response (response/content-type "text/html; charset=utf-8"))
     (response/status (response/response "Log in to access this game.") 401)))
 
 (defn- purchase-action [datasource request]
@@ -261,11 +272,12 @@
                     (action-id (get-in request [:params :action-id]))
                     (player-id (get-in request [:params :target-player-id])))
             fresh (authorized-data datasource request)
-            statuses (game-repository/action-statuses datasource (get-in fresh [:game :id]) (get-in fresh [:viewer :id]) (get-in fresh [:game :tick]) (get-in fresh [:viewer :money]))
             {:keys [maximum-uses reset-ticks]} (game-rules/action-usage-rules game-data/game-data)
             reset-hours (/ reset-ticks (double (game-rules/ticks-per-hour game-data/game-data)))
             [kind message] (case (:error result) nil ["good" (str "AKTION NOTIERT · TICK " (:apply-at-tick result))] :action-limit ["warning" (format "%d MASSNAHMEN MÜSSEN FÜR %.0f STUNDEN GENÜGEN" maximum-uses reset-hours)] :insufficient-funds ["error" "NICHT GENUG GELD"] ["error" "DIESE AKTION GEHT HIER NICHT"])]
-        (-> (actions-view/mutation {:game (:game fresh) :viewer (:viewer fresh) :players (:players fresh) :actions statuses :anti-forgery-token (:anti-forgery-token request) :action-id (action-id (get-in request [:params :action-id])) :kind kind :message message}) response/response (response/content-type "text/html; charset=utf-8")))
+        (-> (actions-view/mutation (assoc (action-view-data datasource fresh)
+                                          :anti-forgery-token (:anti-forgery-token request)
+                                          :kind kind :message message)) response/response (response/content-type "text/html; charset=utf-8")))
       (response/status (response/response "Log in to access this game.") 401)))
 
 (defn- research-id [value]
@@ -441,6 +453,8 @@
     ["/games/:game-token/actions"
      {:get (fn [request] (actions-page datasource request))
       :post (fn [request] (purchase-action datasource request))}]
+    ["/games/:game-token/actions/content"
+     {:get (fn [request] (actions-content datasource request))}]
     ["/games/:game-token/research"
      {:get (fn [request] (research-page datasource request))
       :post (fn [request] (purchase-research datasource request))}]
