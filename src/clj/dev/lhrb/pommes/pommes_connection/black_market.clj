@@ -133,4 +133,6 @@
               :items {:creative-bookkeeping {:maximum-concealment 0.10}}})
   (def player {:id 1 :black-market {:creative-bookkeeping 10}
                :game-stats {:suspicion 0.0}})
-  (settle-player rules 10 player {:revenue 100.0 :profit 60.0}))
+  (settle-player rules 10 player {:revenue 100.0 :profit 60.0})
+
+  ,)

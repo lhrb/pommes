@@ -2,21 +2,13 @@
 set -Eeuo pipefail
 
 app_dir=/opt/pommes
-app_user=${SUDO_USER:-}
 
 log() {
   printf '\n==> %s\n' "$*"
 }
 
 require_root() {
-  if [[ $EUID -ne 0 ]]; then
-    echo "Run this script with sudo." >&2
-    exit 1
-  fi
-  if [[ -z $app_user || $app_user == root ]]; then
-    echo "Run with sudo from the SSH user that will deploy the application." >&2
-    exit 1
-  fi
+  [[ "${EUID}" -eq 0 ]] || die "run this script as root"
 }
 
 install_docker() {
@@ -50,10 +42,13 @@ configure_firewall() {
   log "Configuring firewall"
   ufw default deny incoming
   ufw default allow outgoing
-  ufw allow OpenSSH
+
+  ufw allow 22/tcp
   ufw allow 80/tcp
   ufw allow 443/tcp
+
   ufw --force enable
+  ufw status verbose
 }
 
 configure_app() {
@@ -86,7 +81,7 @@ install_backup_timer() {
 require_root
 install_docker
 configure_firewall
-configure_app
-install_backup_timer
+# configure_app
+# install_backup_timer
 
 log "Server setup complete. Log out and back in before using Docker as $app_user."
