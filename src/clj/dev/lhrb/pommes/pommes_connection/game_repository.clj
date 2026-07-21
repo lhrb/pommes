@@ -578,20 +578,21 @@
 
 (defn action-statuses
   [connectable game-id game-player-id tick money]
-  (let [window (get-in game-data/game-data [:game :action-window-ticks])
-        limit (get-in game-data/game-data [:game :actions-per-window])
+  (let [{:keys [maximum-uses reset-ticks]} (game-rules/action-usage-rules game-data/game-data)
         game (jdbc/execute-one! connectable ["SELECT status FROM games WHERE id = ?" game-id] query-options)
         used (:count (jdbc/execute-one! connectable
                                         ["SELECT count(*) AS count FROM game_action_uses
                                           WHERE actor_game_player_id = ? AND purchase_tick > ?"
-                                         game-player-id (- tick window)]
+                                         game-player-id (- tick reset-ticks)]
                                         query-options))
-        available? (and (= "running" (:status game)) (< used limit))]
+        available? (and (= "running" (:status game)) (< used maximum-uses))]
     (mapv (fn [[action-id action]]
             (let [cost (action-cost action tick money)]
               (assoc action
                      :cost cost
-                     :uses-left (max 0 (- limit used))
+                     :maximum-uses maximum-uses
+                     :reset-ticks reset-ticks
+                     :uses-left (max 0 (- maximum-uses used))
                      :available? (and available? (>= (long money) cost)))))
           (game-data/actions))))
 
@@ -623,16 +624,15 @@
              (= actor-game-player-id target-game-player-id)) {:error :invalid-target}
         :else
         (let [tick (:tick actor)
-              window (get-in game-data/game-data [:game :action-window-ticks])
-              limit (get-in game-data/game-data [:game :actions-per-window])
+              {:keys [maximum-uses reset-ticks]} (game-rules/action-usage-rules game-data/game-data)
               used (:count (jdbc/execute-one! tx
                                               ["SELECT count(*) AS count FROM game_action_uses
                                                 WHERE actor_game_player_id = ? AND purchase_tick > ?"
-                                               actor-game-player-id (- tick window)]
+                                               actor-game-player-id (- tick reset-ticks)]
                                               query-options))
               cost (action-cost action tick (:money actor))]
           (cond
-            (>= used limit) {:error :action-limit}
+            (>= used maximum-uses) {:error :action-limit}
             (< (long (:money actor)) cost) {:error :insufficient-funds :cost cost}
             :else
             (let [apply-at-tick (inc tick)

@@ -105,12 +105,12 @@
   (let [player (some #(when (= player-id (:id %)) %) (:players state))
         action (game-data/action action-id)
         tick (:tick state)
-        window (get-in state [:game :action-window-ticks])
-        uses (filter #(> % (- tick window)) (get-in player [:game-stats :action-purchases] []))
+        {:keys [maximum-uses reset-ticks]} (game-rules/action-usage-rules state)
+        uses (filter #(> % (- tick reset-ticks)) (get-in player [:game-stats :action-purchases] []))
         cost (game-rules/action-cost state action tick)
         target-id (if (= :any-player (:target action)) player-id (leading-opponent state player-id))
         use-id (str (name player-id) "-" tick "-" (name action-id))]
-    (if (or (>= (count uses) (get-in state [:game :actions-per-window]))
+    (if (or (>= (count uses) maximum-uses)
             (< (:money player) cost))
       state
       (update state :players

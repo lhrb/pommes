@@ -4,9 +4,7 @@
   {:game
    {:player-count 3
     :duration-ticks 20160
-    :score-every-ticks 720
-    :action-window-ticks 1440
-    :actions-per-window 2}
+    :score-every-ticks 720}
 
    :rules
    {:tick-seconds 30
@@ -121,7 +119,9 @@
                :price 700}]}}
 
    :actions
-   {:send-punks
+   {:maximum-uses 2
+    :reset-ticks 1440
+    :send-punks
     {:id :send-punks
      :name "Die Punks kommen"
      :target :other-player
@@ -304,7 +304,7 @@
   (get-in game-data [:setup :starter]))
 
 (defn actions []
-  (dissoc (:actions game-data) :cost))
+  (into {} (filter (comp :id val) (:actions game-data))))
 
 (defn action [action-id]
   (get (actions) action-id))

@@ -569,7 +569,7 @@
             invalid-punks (game-repository/purchase-action! datasource ada :send-punks ada)
             invalid-rocker (game-repository/purchase-action! datasource ada :rocker-meeting ada)
             purchase (game-repository/purchase-action! datasource ada :send-punks bea)
-            repeat-purchase (game-repository/purchase-action! datasource ada :send-punks bea)
+            repeat-purchase (game-repository/purchase-action! datasource ada :parking-chaos bea)
             over-limit (game-repository/purchase-action! datasource ada :review-bomb bea)]
         (is (= :invalid-target (:error invalid-punks)))
         (is (= :invalid-target (:error invalid-rocker)))
@@ -598,7 +598,11 @@
           (is (= :demographic-attraction
                  (:type (first (edn/read-string (:active-effects target))))))
           (is (some #(= "action" (:kind %)) events))
-          (is (some #(re-find #"Punks.*Bea" (:message %)) events))))
+          (is (some #(re-find #"Punks.*Bea" (:message %)) events)))
+        (jdbc/execute-one! datasource ["UPDATE games SET tick = ? WHERE id = ?" 1440 game-id]
+                           query-options)
+        (is (= {:ok true :cost 18000 :apply-at-tick 1441}
+               (game-repository/purchase-action! datasource ada :parking-chaos bea))))
       (finally
         (Files/deleteIfExists database-file)))))
 

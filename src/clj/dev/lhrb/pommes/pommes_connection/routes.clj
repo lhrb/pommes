@@ -2,7 +2,9 @@
   (:require
    [clojure.string :as str]
    [dev.lhrb.pommes.pommes-connection.dish-market :as dish-market]
+   [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
    [dev.lhrb.pommes.pommes-connection.game-repository :as game-repository]
+   [dev.lhrb.pommes.pommes-connection.game-rules :as game-rules]
    [dev.lhrb.pommes.pommes-connection.game-tick :as game-tick]
    [dev.lhrb.pommes.pommes-connection.money :as money]
    [dev.lhrb.pommes.pommes-connection.views.access :as access-view]
@@ -260,7 +262,9 @@
                     (player-id (get-in request [:params :target-player-id])))
             fresh (authorized-data datasource request)
             statuses (game-repository/action-statuses datasource (get-in fresh [:game :id]) (get-in fresh [:viewer :id]) (get-in fresh [:game :tick]) (get-in fresh [:viewer :money]))
-            [kind message] (case (:error result) nil ["good" (str "AKTION NOTIERT · TICK " (:apply-at-tick result))] :action-limit ["warning" "ZWEI MASSNAHMEN MÜSSEN FÜR ZWÖLF STUNDEN GENÜGEN"] :insufficient-funds ["error" "NICHT GENUG GELD"] ["error" "DIESE AKTION GEHT HIER NICHT"])]
+            {:keys [maximum-uses reset-ticks]} (game-rules/action-usage-rules game-data/game-data)
+            reset-hours (/ reset-ticks (double (game-rules/ticks-per-hour game-data/game-data)))
+            [kind message] (case (:error result) nil ["good" (str "AKTION NOTIERT · TICK " (:apply-at-tick result))] :action-limit ["warning" (format "%d MASSNAHMEN MÜSSEN FÜR %.0f STUNDEN GENÜGEN" maximum-uses reset-hours)] :insufficient-funds ["error" "NICHT GENUG GELD"] ["error" "DIESE AKTION GEHT HIER NICHT"])]
         (-> (actions-view/mutation {:game (:game fresh) :viewer (:viewer fresh) :players (:players fresh) :actions statuses :anti-forgery-token (:anti-forgery-token request) :action-id (action-id (get-in request [:params :action-id])) :kind kind :message message}) response/response (response/content-type "text/html; charset=utf-8")))
       (response/status (response/response "Log in to access this game.") 401)))
 

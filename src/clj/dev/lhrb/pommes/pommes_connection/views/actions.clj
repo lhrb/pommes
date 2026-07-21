@@ -1,5 +1,7 @@
 (ns dev.lhrb.pommes.pommes-connection.views.actions
   (:require [clojure.string :as str]
+            [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
+            [dev.lhrb.pommes.pommes-connection.game-rules :as game-rules]
             [dev.lhrb.pommes.pommes-connection.money :as money]
             [dev.lhrb.pommes.pommes-connection.views.layout :as layout]
             [ring.util.response :as response]))
@@ -20,8 +22,9 @@
   (let [options (targets action viewer players) id (name (:id action))]
     [:article {:id (str "action-" id) :class "offer-card action-card"}
      [:div.offer-card__top (layout/icon (get action-icons (:id action) "nav_action") "") [:div [:h2 (:name action)] [:p.meta (get action-stories (:id action))]]]
-     [:p.meta (format "Wirkt %.1f Std. · %d von 2 Maßnahmen im Zeitfenster frei"
-                      (/ (:duration action) 120.0) (:uses-left action 0))]
+     [:p.meta (format "Wirkt %.1f Std. · %d von %d Maßnahmen im Zeitfenster frei"
+                      (/ (:duration action) (double (game-rules/ticks-per-hour game-data/game-data)))
+                      (:uses-left action 0) (:maximum-uses action))]
      [:p [:strong (money (:cost action))] " · " (if (:available? action) "bereit" "das Maß ist vorerst voll")]
      [:form {:method "post" :action (str "/games/" (:game-token game) "/actions")
              :hx-post (str "/games/" (:game-token game) "/actions") :hx-target (str "#action-" id) :hx-swap "outerHTML"}

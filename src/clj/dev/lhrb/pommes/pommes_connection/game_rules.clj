@@ -33,6 +33,10 @@
     (money/round-cents
      (max minimum (* reference (ticks-per-hour config) hours)))))
 
+(defn action-usage-rules
+  [config]
+  (select-keys (:actions config) [:maximum-uses :reset-ticks]))
+
 (defn running?
   [game]
   (= :running (keyword (:status game))))
@@ -46,7 +50,9 @@
     {:rules {:tick-seconds 30}
      :economy {:reference-profit-per-tick {:opening 300 :development 600 :late 1000}}
      :research {:cost {:income-hours [2 4 8 14 24]}}
-     :actions {:cost {:minimum 10000}}})
+     :actions {:cost {:minimum 10000}
+               :maximum-uses 2
+               :reset-ticks 1440}})
 
   (progression-cost config :research 0)
   (action-cost config {:cost {:income-hours 2.0}} 12000))
