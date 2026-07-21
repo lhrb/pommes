@@ -8,7 +8,7 @@
 
    :rules
    {:tick-seconds 30
-    :ticks-per-day 2880
+    :default-order-rate-per-tick 0.012
     :choice-beta 3.5
     :market-memory-alpha 0.10
     :relative-price-cap 0.25
@@ -23,8 +23,8 @@
     :maximum-population-share 0.20}
 
    :economy
-   {:starting-money 150000
-    :reference-profit-per-tick {:opening 300 :development 600 :late 1000}}
+   {:starting-money 6000000
+    :reference-profit-per-tick {:opening 12000 :development 24000 :late 80000}}
 
    :prestige
    {:market-share-pool 2
@@ -206,7 +206,7 @@
     :demographics
     [{:id :students
       :population 500
-      :daily-order-rate 0.28
+      :order-rate-per-tick 0.012
       :outside-option-utility 0.48
       :behavior {:topping-variety-strength 0.20
                  :positioning-variety-strength 0.10}
@@ -221,7 +221,7 @@
 
      {:id :families
       :population 350
-      :daily-order-rate 0.20
+      :order-rate-per-tick 0.012
       :outside-option-utility 0.50
       :behavior {:topping-variety-strength 0.05
                  :positioning-variety-strength 0.03}
@@ -236,7 +236,7 @@
 
      {:id :yuppies
       :population 180
-      :daily-order-rate 0.18
+      :order-rate-per-tick 0.012
       :outside-option-utility 0.52
       :behavior {:topping-variety-strength 0.35
                  :positioning-variety-strength 0.30}
@@ -251,7 +251,7 @@
 
      {:id :office-workers
       :population 300
-      :daily-order-rate 0.30
+      :order-rate-per-tick 0.012
       :outside-option-utility 0.50
       :behavior {:topping-variety-strength 0.10
                  :positioning-variety-strength 0.05}
@@ -267,7 +267,7 @@
 
      {:id :retirees
       :population 220
-      :daily-order-rate 0.20
+      :order-rate-per-tick 0.012
       :outside-option-utility 0.54
       :behavior {:topping-variety-strength 0.0
                  :positioning-variety-strength 0.0}
@@ -282,7 +282,7 @@
 
      {:id :foodies
       :population 140
-      :daily-order-rate 0.16
+      :order-rate-per-tick 0.012
       :outside-option-utility 0.55
       :behavior {:topping-variety-strength 0.30
                  :positioning-variety-strength 0.25}

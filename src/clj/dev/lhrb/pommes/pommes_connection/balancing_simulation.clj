@@ -218,7 +218,7 @@
                       (/ (* gain decay (- 1.0 decay-over-step))
                          (* decay-over-step (- 1.0 decay))))]
     {:rules (assoc rules
-                   :ticks-per-day (/ (double (:ticks-per-day rules 2880)) ticks)
+                   :demand-ticks ticks
                    :market-memory-alpha (- 1.0 (Math/pow (- 1.0 alpha) ticks)))
      :regulars (assoc regulars
                       :loss-rate (- 1.0 (Math/pow (- 1.0 (double (:loss-rate regulars 0.0))) ticks)))

@@ -19,7 +19,7 @@
 
 (deftest exact-balancing-keeps-the-real-single-tick-path
   (let [game (balancing/run-game {:seed 42 :ticks 720 :mode :exact})]
-    (is (= {:id :bude-1 :strategy :adaptive-menu :activity 4 :prestige 10}
+    (is (= {:id :bude-1 :strategy :adaptive-menu :activity 4 :prestige 13}
            (:winner game)))
     (is (= 1 (:leader-changes game)))))
 

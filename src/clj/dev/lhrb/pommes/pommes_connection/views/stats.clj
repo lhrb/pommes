@@ -48,9 +48,9 @@
       [:p.meta (str (quantity population) " Menschen, die auf einen Pommes-Moment warten.")]
       [:table
        [:thead [:tr [:th "Gruppe"] [:th.numeric "Einwohner"] [:th.numeric "Stadtanteil"]
-                [:th.numeric "Bestellungen / Tick"]]]
+                [:th.numeric "Kundschaft / Tick"]]]
        [:tbody
-        (for [{:keys [id population daily-order-rate] :as demographic} (:demographics city)]
+        (for [{:keys [id population order-rate-per-tick]} (:demographics city)]
           [:tr
            [:td (label id)]
            [:td.numeric (quantity population)]
@@ -58,10 +58,11 @@
                                    (/ (double population) (:population city))
                                    0.0))]
            [:td.numeric (format "%.2f"
-                                (/ (* (double population)
-                                      (double (or daily-order-rate
-                                                  (* 2880.0 (double (or (:eat-rate demographic) 0.0))))))
-                                   2880.0))]] )]]])))
+                                (* (double population)
+                                   (double (or order-rate-per-tick
+                                               (get-in game-data/game-data
+                                                       [:rules :default-order-rate-per-tick])
+                                               0.0))))]] )]]])))
 
 (defn- market-share-panel [city players]
   (layout/panel

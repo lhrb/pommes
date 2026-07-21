@@ -40,11 +40,12 @@
     (+ whole (if (< (roll seed) remainder) 1 0))))
 
 (defn return-count
-  ([count daily-order-rate ticks-per-day satisfaction reliability]
-   (return-count count daily-order-rate ticks-per-day satisfaction reliability :regular-return))
-  ([count daily-order-rate ticks-per-day satisfaction reliability seed]
+  ([count order-rate-per-tick satisfaction reliability]
+   (return-count count order-rate-per-tick 1 satisfaction reliability :regular-return))
+  ([count order-rate-per-tick demand-ticks satisfaction reliability seed]
    (stable-count (* (long (or count 0))
-                    (/ (double daily-order-rate) (double ticks-per-day))
+                    (double order-rate-per-tick)
+                    (double demand-ticks)
                     (double satisfaction)
                     (+ 1.0 (double reliability)))
                  seed)))
@@ -76,8 +77,8 @@
                               satisfaction (satisfaction offer)
                               reliability (research-modifier (:research player) research-items
                                                                :reliability (:topping (:dish offer)))
-                              returns (min retained (return-count retained (:daily-order-rate demographic 0.0)
-                                                                  (:ticks-per-day regular-rules 2880)
+                              returns (min retained (return-count retained (:order-rate-per-tick demographic 0.0)
+                                                                  (:demand-ticks regular-rules 1)
                                                                   satisfaction reliability
                                                                   [(:tick regular-rules) player-id demographic-id :return]))]
                           (assoc-in result [player-id demographic-id]
@@ -110,7 +111,7 @@
   ;; Evaluate these in a REPL while tuning game-data values.
   (def rules {:base-conversion-chance 0.03 :loss-rate 0.001 :maximum-population-share 0.20})
   (def items {:potato-quality {:effect :conversion :maximum-modifier 0.30}})
-  (def demographic {:id :students :population 500 :daily-order-rate 0.28})
+  (def demographic {:id :students :population 500 :order-rate-per-tick 0.012})
   (def offer {:dish {:topping :ketchup} :components {:preference-match 0.8}})
   (def player {:id :ada :regulars {:students 50} :research {:potato-quality 10}})
   (def prepared (prepare-regulars rules items [demographic] [player] {[:ada :students] offer}))

@@ -840,7 +840,8 @@
   (let [potential-demand
         (long (or (:tick-demand demographic)
                   (Math/round (* (double (:population demographic))
-                                 (double (:eat-rate demographic 0.0))))))
+                                 (double (:order-rate-per-tick demographic 0.0))
+                                 (double (:demand-ticks rules 1))))))
 
         beta
         (double
@@ -924,18 +925,24 @@
    :demographic-sales {}})
 
 (defn allocate-city-demand
-  "Allocates deterministic whole orders and carries fractional demand forward."
+  "Allocates deterministic whole orders at the game's per-tick appetite.
+
+   `:demand-ticks` lets balance simulations aggregate multiple live ticks."
   [rules city]
-  (let [ticks-per-day (double (:ticks-per-day rules 2880))]
+  (let [demand-ticks (double (:demand-ticks rules 1))]
     (reduce (fn [[city demographics] demographic]
               (let [id (:id demographic)
-                    raw (+ (/ (* (double (:population demographic))
-                                 (double (:daily-order-rate demographic 0.0)))
-                              ticks-per-day)
+                    order-rate (double (or (:order-rate-per-tick demographic)
+                                           (:default-order-rate-per-tick rules)
+                                           0.0))
+                    raw (+ (* (double (:population demographic))
+                              order-rate
+                              demand-ticks)
                            (double (get-in city [:demand-carry id] 0.0)))
                     demand (long (Math/floor raw))]
                 [(assoc-in city [:demand-carry id] (- raw demand))
                  (conj demographics (assoc demographic
+                                           :order-rate-per-tick order-rate
                                            :tick-demand demand
                                            :tick (inc (long (:tick rules 0)))))]))
             [city []]
@@ -1231,7 +1238,7 @@
 
         prepared-regulars
         (regulars/prepare-regulars (assoc (:regulars state)
-                                         :ticks-per-day (:ticks-per-day rules 2880)
+                                         :demand-ticks (:demand-ticks rules 1)
                                          :tick (inc (or tick 0)))
                                    (get-in state [:research :items])
                                    demographics players offers)
@@ -1340,16 +1347,16 @@
   (merge
    {:tick 0
     :players
-    [{:id :fritza :money 150000 :prestige 0 :interior :street-food :market-modifiers {} :effects []
+    [{:id :fritza :money 6000000 :prestige 0 :interior :street-food :market-modifiers {} :effects []
       :dishes [{:id :cheap-ketchup :pommes {:size :small :seasoning :salt} :topping :ketchup :price 350}
                {:id :large-mayo :pommes {:size :large :seasoning :pommesgewuerz} :topping :mayo :price 520}
                {:id :special :pommes {:size :large :seasoning :pommesgewuerz} :topping :special :price 600}]}
-     {:id :goldene-gabel :money 150000 :prestige 0 :interior :classic :market-modifiers {}
+     {:id :goldene-gabel :money 6000000 :prestige 0 :interior :classic :market-modifiers {}
       :effects [{:kind :rats :utility -0.20 :ticks-left 1}]
       :dishes [{:id :classic :pommes {:size :large :seasoning :salt} :topping :ketchup-mayo :price 480}
                {:id :kids :pommes {:size :small :seasoning :salt} :topping :ketchup :price 380}
                {:id :sate :pommes {:size :large :seasoning :pommesgewuerz} :topping :sate :price 650}]}
-     {:id :pommes-lab :money 150000 :prestige 0 :interior :modern :market-modifiers {} :effects []
+     {:id :pommes-lab :money 6000000 :prestige 0 :interior :modern :market-modifiers {} :effects []
       :dishes [{:id :micro-special :pommes {:size :small :seasoning :pommesgewuerz} :topping :special :price 900}
                {:id :sate-edition :pommes {:size :small :seasoning :pommesgewuerz} :topping :sate :price 850}
                {:id :normal-ketchup :pommes {:size :small :seasoning :salt} :topping :ketchup :price 450}]}]}
