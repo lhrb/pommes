@@ -468,7 +468,8 @@
               (handler {:request-method :post
                         :uri (str "/games/" game-token "/dishes/setup")
                         :session {:game-token game-token :game-player-id game-player-id}
-                        :params {:interior "invalid"}})
+                        :params {:interior "invalid"
+                                 :dish-1-price "3.50"}})
               setup-response
               (handler {:request-method :post
                         :uri (str "/games/" game-token "/dishes/setup")
@@ -557,6 +558,8 @@
           (is (re-find #"Wareneinsatz" (:body dishes-response)))
           (is (= 400 (:status invalid-setup-response)))
           (is (re-find #"Name is required" (:body invalid-setup-response)))
+          (is (re-find #"(?s)<input(?=[^>]*id=\"dish-1-price\")(?=[^>]*value=\"3.50\")[^>]*>"
+                       (:body invalid-setup-response)))
           (is (= 200 (:status setup-response)))
           (is (re-find #"Menü gespeichert" (:body setup-response)))
           (is (not (re-find #"market-history\" open" (:body setup-response))))

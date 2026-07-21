@@ -1,5 +1,5 @@
-function formatEuro(value) {
-  return `€${value.toFixed(2).replace(".", ",")}`;
+function formatEuro(cents) {
+  return `€${(cents / 100).toFixed(2).replace(".", ",")}`;
 }
 
 function dishCost(dish) {

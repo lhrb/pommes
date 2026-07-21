@@ -62,7 +62,8 @@
       [:label {:for (str prefix "price")} "Preis"
        [:input {:name (str prefix "price") :id (str prefix "price") :type "number" :step "0.01"
                 :min "0" :required true
-                :value (money/euros-input (:price dish))}]]]
+                :value (let [price (:price dish)]
+                         (if (integer? price) (money/euros-input price) price))}]]]
      [:p "Wareneinsatz: " [:strong {:data-cost-total true} (money (dish-cost catalog dish))]]
      (when-let [dish-errors (seq (get errors index))]
        [:ul.errors (for [error dish-errors] [:li error])])]))
