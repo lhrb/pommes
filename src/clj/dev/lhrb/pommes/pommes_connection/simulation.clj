@@ -187,7 +187,7 @@
       :cheap
       (let [max-price
             (max 0.01
-                 (* (double (get price-preferences :max 5.0))
+                 (* (double (get price-preferences :max 500))
                     tolerance-multiplier))]
 
         (clamp -1.0
@@ -204,7 +204,7 @@
              5.0))
        (double
         (* tolerance-multiplier
-           (double (get price-preferences :tolerance 2.0)))))
+           (double (get price-preferences :tolerance 200)))))
 
       :status
       (ideal-score
@@ -215,7 +215,7 @@
              8.0))
        (double
         (* tolerance-multiplier
-           (double (get price-preferences :tolerance 3.0)))))
+           (double (get price-preferences :tolerance 300)))))
 
       0.0)))
 
@@ -918,8 +918,8 @@
 (def empty-stats
   {:sales 0
    :regular-sales 0
-   :revenue 0.0
-   :profit 0.0
+   :revenue 0
+   :profit 0
    :dish-sales {}
    :demographic-sales {}})
 
@@ -1000,8 +1000,7 @@
       ;; Money changes by tax-adjusted profit, not revenue.
       (update
        :money
-       (fnil + 0.0)
-       (:profit stats))
+       #(max 0 (+ (long (or % 0)) (long (:profit stats)))))
 
       (update :prestige #(max 0 (- (long (or % 0)) audit-loss)))
 
@@ -1341,19 +1340,19 @@
   (merge
    {:tick 0
     :players
-    [{:id :fritza :money 1500.0 :prestige 0 :interior :street-food :market-modifiers {} :effects []
-      :dishes [{:id :cheap-ketchup :pommes {:size :small :seasoning :salt} :topping :ketchup :price 3.50}
-               {:id :large-mayo :pommes {:size :large :seasoning :pommesgewuerz} :topping :mayo :price 5.20}
-               {:id :special :pommes {:size :large :seasoning :pommesgewuerz} :topping :special :price 6.00}]}
-     {:id :goldene-gabel :money 1500.0 :prestige 0 :interior :classic :market-modifiers {}
+    [{:id :fritza :money 150000 :prestige 0 :interior :street-food :market-modifiers {} :effects []
+      :dishes [{:id :cheap-ketchup :pommes {:size :small :seasoning :salt} :topping :ketchup :price 350}
+               {:id :large-mayo :pommes {:size :large :seasoning :pommesgewuerz} :topping :mayo :price 520}
+               {:id :special :pommes {:size :large :seasoning :pommesgewuerz} :topping :special :price 600}]}
+     {:id :goldene-gabel :money 150000 :prestige 0 :interior :classic :market-modifiers {}
       :effects [{:kind :rats :utility -0.20 :ticks-left 1}]
-      :dishes [{:id :classic :pommes {:size :large :seasoning :salt} :topping :ketchup-mayo :price 4.80}
-               {:id :kids :pommes {:size :small :seasoning :salt} :topping :ketchup :price 3.80}
-               {:id :sate :pommes {:size :large :seasoning :pommesgewuerz} :topping :sate :price 6.50}]}
-     {:id :pommes-lab :money 1500.0 :prestige 0 :interior :modern :market-modifiers {} :effects []
-      :dishes [{:id :micro-special :pommes {:size :small :seasoning :pommesgewuerz} :topping :special :price 9.00}
-               {:id :sate-edition :pommes {:size :small :seasoning :pommesgewuerz} :topping :sate :price 8.50}
-               {:id :normal-ketchup :pommes {:size :small :seasoning :salt} :topping :ketchup :price 4.50}]}]}
+      :dishes [{:id :classic :pommes {:size :large :seasoning :salt} :topping :ketchup-mayo :price 480}
+               {:id :kids :pommes {:size :small :seasoning :salt} :topping :ketchup :price 380}
+               {:id :sate :pommes {:size :large :seasoning :pommesgewuerz} :topping :sate :price 650}]}
+     {:id :pommes-lab :money 150000 :prestige 0 :interior :modern :market-modifiers {} :effects []
+      :dishes [{:id :micro-special :pommes {:size :small :seasoning :pommesgewuerz} :topping :special :price 900}
+               {:id :sate-edition :pommes {:size :small :seasoning :pommesgewuerz} :topping :sate :price 850}
+               {:id :normal-ketchup :pommes {:size :small :seasoning :salt} :topping :ketchup :price 450}]}]}
    (game-data/simulation-config)))
 
 ;; Compare one simulated tick with and without an action. Effects are read

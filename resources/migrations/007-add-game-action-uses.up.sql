@@ -4,7 +4,7 @@ CREATE TABLE game_action_uses (
   actor_game_player_id INTEGER NOT NULL REFERENCES game_players(id) ON DELETE CASCADE,
   target_game_player_id INTEGER NOT NULL REFERENCES game_players(id) ON DELETE CASCADE,
   action_id TEXT NOT NULL,
-  cost REAL NOT NULL CHECK (cost >= 0),
+  cost INTEGER NOT NULL CHECK (cost >= 0),
   purchase_tick INTEGER NOT NULL CHECK (purchase_tick >= 0),
   apply_at_tick INTEGER NOT NULL CHECK (apply_at_tick > 0),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP

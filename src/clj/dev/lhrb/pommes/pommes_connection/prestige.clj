@@ -3,7 +3,7 @@
 (def empty-window
   {:sales 0
    :regular-sales 0
-   :profit 0.0
+   :profit 0
    :dish-sales {}
    :demographic-sales {}})
 
@@ -12,7 +12,7 @@
   (-> (merge empty-window window)
       (update :sales + (long (:sales tick-stats 0)))
       (update :regular-sales + (long (:regular-sales tick-stats 0)))
-      (update :profit + (double (:profit tick-stats 0.0)))
+      (update :profit + (long (:profit tick-stats 0)))
       (update :dish-sales #(merge-with + (or % {}) (:dish-sales tick-stats {})))
       (update :demographic-sales #(merge-with + (or % {}) (:demographic-sales tick-stats {})))))
 
@@ -96,7 +96,7 @@
                                  (ranked-points players #(get (window %) :sales 0)
                                                 (:ranking-points rules)))
         market-awards (add-award market-awards :profit
-                                 (ranked-points players #(get (window %) :profit 0.0)
+                                 (ranked-points players #(get (window %) :profit 0)
                                                 (:ranking-points rules)))
         market-awards (add-award market-awards :regulars
                                  (ranked-points players #(get (window %) :regular-sales 0)

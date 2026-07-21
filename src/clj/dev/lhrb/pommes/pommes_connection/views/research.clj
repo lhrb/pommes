@@ -1,9 +1,10 @@
 (ns dev.lhrb.pommes.pommes-connection.views.research
   (:require [clojure.string :as str]
+            [dev.lhrb.pommes.pommes-connection.money :as money]
             [dev.lhrb.pommes.pommes-connection.regulars-simulation :as regulars]
             [dev.lhrb.pommes.pommes-connection.views.layout :as layout]
             [ring.util.response :as response]))
-(defn- money [v] (str "€" (str/replace (format "%.2f" (double (or v 0))) "." ",")))
+(defn- money [v] (money/format-euros v))
 (def icons {:potato-quality "research_potato" :fryer "research_fryer" :fry-grease "research_grease" :ketchup-recipe "reseach_ketchup" :mayo-recipe "reseach_majo"})
 (def demographic-icons {:students "dem_student" :families "dem_families" :retirees "dem_retiree" :office-workers "dem_worker" :yuppies "dem_yuppi" :foodies "dem_foodie"})
 (defn- label [v] ({:students "Studierende" :families "Familien" :retirees "Rentner" :office-workers "Büromenschen" :yuppies "Yuppies" :foodies "Feinschmecker"} v (name v)))

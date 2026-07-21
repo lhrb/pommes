@@ -18,21 +18,21 @@
 
 (def menu-profiles
   {:students {:interior :street-food
-              :dishes [{:name "Die Günstige" :pommes {:size :small :seasoning :salt} :topping :ketchup :price 3.50}
-                       {:name "Die Würzige" :pommes {:size :medium :seasoning :pommesgewuerz} :topping :curry-ketchup :price 4.50}
-                       {:name "Die Große" :pommes {:size :large :seasoning :salt} :topping :ketchup-mayo :price 5.20}]}
+              :dishes [{:name "Die Günstige" :pommes {:size :small :seasoning :salt} :topping :ketchup :price 350}
+                       {:name "Die Würzige" :pommes {:size :medium :seasoning :pommesgewuerz} :topping :curry-ketchup :price 450}
+                       {:name "Die Große" :pommes {:size :large :seasoning :salt} :topping :ketchup-mayo :price 520}]}
    :families {:interior :cozy
-              :dishes [{:name "Familienklein" :pommes {:size :small :seasoning :salt} :topping :ketchup :price 4.20}
-                       {:name "Familiengroß" :pommes {:size :large :seasoning :salt} :topping :ketchup-mayo :price 5.50}
-                       {:name "Familienamt" :pommes {:size :extra-large :seasoning :salt} :topping :mayo :price 6.20}]}
+              :dishes [{:name "Familienklein" :pommes {:size :small :seasoning :salt} :topping :ketchup :price 420}
+                       {:name "Familiengroß" :pommes {:size :large :seasoning :salt} :topping :ketchup-mayo :price 550}
+                       {:name "Familienamt" :pommes {:size :extra-large :seasoning :salt} :topping :mayo :price 620}]}
    :office-workers {:interior :modern
-                    :dishes [{:name "Mittag" :pommes {:size :medium :seasoning :pommesgewuerz} :topping :curry-ketchup :price 5.20}
-                             {:name "Termin" :pommes {:size :small :seasoning :salt} :topping :ketchup :price 4.50}
-                             {:name "Überstunde" :pommes {:size :large :seasoning :pommesgewuerz} :topping :garlic-sauce :price 6.20}]}
+                    :dishes [{:name "Mittag" :pommes {:size :medium :seasoning :pommesgewuerz} :topping :curry-ketchup :price 520}
+                             {:name "Termin" :pommes {:size :small :seasoning :salt} :topping :ketchup :price 450}
+                             {:name "Überstunde" :pommes {:size :large :seasoning :pommesgewuerz} :topping :garlic-sauce :price 620}]}
    :premium {:interior :premium
-             :dishes [{:name "Besonderheit" :pommes {:size :small :seasoning :pommesgewuerz} :topping :special :price 8.50}
-                      {:name "Satefrage" :pommes {:size :small :seasoning :pommesgewuerz} :topping :sate :price 8.00}
-                      {:name "Knoblauchlage" :pommes {:size :medium :seasoning :pommesgewuerz} :topping :garlic-sauce :price 7.20}]}})
+             :dishes [{:name "Besonderheit" :pommes {:size :small :seasoning :pommesgewuerz} :topping :special :price 850}
+                      {:name "Satefrage" :pommes {:size :small :seasoning :pommesgewuerz} :topping :sate :price 800}
+                      {:name "Knoblauchlage" :pommes {:size :medium :seasoning :pommesgewuerz} :topping :garlic-sauce :price 720}]}})
 
 (defn- with-dish-ids [profile player-id]
   (update profile :dishes
@@ -93,7 +93,7 @@
                           (-> player
                               (update :money - cost)
                               (update-in [system branch] (fnil inc 0))
-                              (update-in [:game-stats :spending system] (fnil + 0.0) cost))
+                              (update-in [:game-stats :spending system] (fnil + 0) cost))
                           player))
                       players))))))
 
@@ -120,7 +120,7 @@
                           (= player-id (:id candidate))
                           (-> (update :money - cost)
                               (assoc-in [:game-stats :action-purchases] (conj (vec uses) tick))
-                              (update-in [:game-stats :spending :actions] (fnil + 0.0) cost))
+                              (update-in [:game-stats :spending :actions] (fnil + 0) cost))
 
                           (= target-id (:id candidate))
                           (update :effects into

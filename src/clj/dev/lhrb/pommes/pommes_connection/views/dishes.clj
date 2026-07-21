@@ -2,6 +2,7 @@
   (:require
    [clojure.string :as str]
    [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
+   [dev.lhrb.pommes.pommes-connection.money :as money]
    [dev.lhrb.pommes.pommes-connection.views.layout :as layout]
    [ring.util.response :as response]))
 
@@ -25,8 +26,7 @@
     :foodies "Feinschmeckerinnen und Feinschmecker"}
    value (-> value name (str/replace #"-" " ") str/capitalize)))
 
-(defn- money [value]
-  (str "€" (str/replace (format "%.2f" (double (or value 0.0))) "." ",")))
+(defn- money [value] (money/format-euros value))
 
 (defn- quantity [value] (format "%d" (long (Math/round (double (or value 0.0))))))
 
@@ -61,7 +61,9 @@
                      #(get-in catalog [:toppings % :cost]))]
       [:label {:for (str prefix "price")} "Preis"
        [:input {:name (str prefix "price") :id (str prefix "price") :type "number" :step "0.01"
-                :min "0" :required true :value (or (:price dish) "")}]]]
+                :min "0" :required true
+                :value (let [price (:price dish)]
+                         (if (integer? price) (money/euros-input price) price))}]]]
      [:p "Wareneinsatz: " [:strong {:data-cost-total true} (money (dish-cost catalog dish))]]
      (when-let [dish-errors (seq (get errors index))]
        [:ul.errors (for [error dish-errors] [:li error])])]))

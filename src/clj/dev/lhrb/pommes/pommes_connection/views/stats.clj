@@ -2,11 +2,11 @@
   (:require
    [clojure.string :as str]
    [dev.lhrb.pommes.pommes-connection.game-data :as game-data]
+   [dev.lhrb.pommes.pommes-connection.money :as money]
    [dev.lhrb.pommes.pommes-connection.views.layout :as layout]
    [ring.util.response :as response]))
 
-(defn- money [value]
-  (str "€" (str/replace (format "%.2f" (double (or value 0.0))) "." ",")))
+(defn- money [value] (money/format-euros value))
 
 (defn- quantity [value]
   (format "%d" (long (Math/round (double (or value 0.0))))))

@@ -11,7 +11,7 @@ CREATE TABLE game_players (
   id INTEGER PRIMARY KEY,
   game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
   player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-  money REAL NOT NULL DEFAULT 20.0,
+  money INTEGER NOT NULL DEFAULT 150000 CHECK (money >= 0),
   prestige INTEGER NOT NULL DEFAULT 0,
   interior TEXT NOT NULL,
   active_effects TEXT NOT NULL DEFAULT '[]',
@@ -26,7 +26,7 @@ CREATE TABLE player_dishes (
   size TEXT NOT NULL,
   seasoning TEXT NOT NULL,
   topping TEXT NOT NULL,
-  price REAL NOT NULL CHECK (price >= 0)
+  price INTEGER NOT NULL CHECK (price >= 0)
 );
 --;;
 

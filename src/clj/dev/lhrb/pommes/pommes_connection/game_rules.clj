@@ -1,4 +1,5 @@
-(ns dev.lhrb.pommes.pommes-connection.game-rules)
+(ns dev.lhrb.pommes.pommes-connection.game-rules
+  (:require [dev.lhrb.pommes.pommes-connection.money :as money]))
 
 (defn game-phase
   [tick]
@@ -21,7 +22,7 @@
   [config system level]
   (let [hours (get-in config [system :cost :income-hours level])]
     (when hours
-      (/ (Math/round (* 100.0 (income-hours-cost config hours))) 100.0))))
+      (money/round-cents (income-hours-cost config hours)))))
 
 (defn action-cost
   [config action tick]
@@ -29,9 +30,8 @@
         reference (double (get-in config [:economy :reference-profit-per-tick phase] 0.0))
         hours (double (get-in action [:cost :income-hours] 0.0))
         minimum (double (get-in config [:actions :cost :minimum] 0.0))]
-    (/ (Math/round (* 100.0
-                      (max minimum (* reference (ticks-per-hour config) hours))))
-       100.0)))
+    (money/round-cents
+     (max minimum (* reference (ticks-per-hour config) hours)))))
 
 (defn running?
   [game]
@@ -44,9 +44,9 @@
 (comment
   (def config
     {:rules {:tick-seconds 30}
-     :economy {:reference-profit-per-tick {:opening 3.0 :development 6.0 :late 10.0}}
+     :economy {:reference-profit-per-tick {:opening 300 :development 600 :late 1000}}
      :research {:cost {:income-hours [2 4 8 14 24]}}
-     :actions {:cost {:minimum 100.0}}})
+     :actions {:cost {:minimum 10000}}})
 
   (progression-cost config :research 0)
   (action-cost config {:cost {:income-hours 2.0}} 12000))

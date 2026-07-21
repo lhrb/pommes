@@ -1,4 +1,5 @@
-(ns dev.lhrb.pommes.pommes-connection.black-market)
+(ns dev.lhrb.pommes.pommes-connection.black-market
+  (:require [dev.lhrb.pommes.pommes-connection.money :as money]))
 
 ;; This namespace is deliberately pure. Persistence owns upgrade levels while
 ;; the simulation passes those levels and the current durable player stats in.
@@ -58,14 +59,16 @@
    tick
    player
    {:keys [revenue profit] :as tick-stats}]
-  (let [game-stats (or (:game-stats player) {})
+  (let [revenue (money/round-cents revenue)
+        profit (money/round-cents profit)
+        game-stats (or (:game-stats player) {})
         penalty? (penalty-active? game-stats)
         configured-concealment (concealment-rate rules (:black-market player))
         configured-untaxed-rate (untaxed-income-rate rules (:black-market player))
         protection (audit-protection rules (:black-market player))
         concealment (if penalty? 0.0 configured-concealment)
         untaxed-rate (if penalty? 0.0 configured-untaxed-rate)
-        untaxed-income (* (double revenue) untaxed-rate)
+        raw-untaxed-income (* (double revenue) untaxed-rate)
         suspicion-before (double (or (:suspicion game-stats) 0.0))
         risk-rate (+ concealment untaxed-rate)
         suspicion-after-decay (clamp 0.0 1.0
@@ -85,12 +88,13 @@
         effective-concealment (if audited? 0.0 concealment)
         effective-tax-rate (* (double tax-rate) (if (or penalty? audited?) 2.0 1.0))
         taxable-revenue (* (double revenue) (- 1.0 effective-concealment))
-        tax (* taxable-revenue effective-tax-rate)
-        tax-avoided (* (double revenue) effective-concealment (double tax-rate))
+        tax (money/round-cents (* taxable-revenue effective-tax-rate))
+        tax-avoided (money/round-cents (* (double revenue) effective-concealment (double tax-rate)))
+        untaxed-income (money/round-cents raw-untaxed-income)
         illicit-this-tick (+ tax-avoided untaxed-income)
-        illicit-since-audit (+ (double (:illicit-since-audit game-stats 0.0)) illicit-this-tick)
-        gross-since-audit (+ (double (:gross-profit-since-audit game-stats 0.0)) (max 0.0 (double profit)))
-        audit-fine (if audited? (min illicit-since-audit gross-since-audit) 0.0)
+        illicit-since-audit (+ (long (:illicit-since-audit game-stats 0)) illicit-this-tick)
+        gross-since-audit (+ (long (:gross-profit-since-audit game-stats 0)) (max 0 profit))
+        audit-fine (if audited? (min illicit-since-audit gross-since-audit) 0)
         remaining-penalty (cond
                             audited? (dec (long audit-penalty-ticks))
                             penalty? (dec (long (:audit-penalty-ticks game-stats)))
@@ -98,17 +102,18 @@
         updated-game-stats (-> game-stats
                                (assoc :suspicion (if audited? 0.0 suspicion-after-decay)
                                       :audit-penalty-ticks (max 0 remaining-penalty)
-                                      :illicit-since-audit (if audit-check? 0.0 illicit-since-audit)
-                                      :gross-profit-since-audit (if audit-check? 0.0 gross-since-audit))
+                                      :illicit-since-audit (if audit-check? 0 illicit-since-audit)
+                                      :gross-profit-since-audit (if audit-check? 0 gross-since-audit))
                                (update :audit-count (fnil + 0) (if audited? 1 0))
-                               (update :total-tax-paid (fnil + 0.0) tax)
-                               (update :total-tax-avoided (fnil + 0.0) tax-avoided))
+                               (update :total-tax-paid (fnil + 0) tax)
+                               (update :total-tax-avoided (fnil + 0) tax-avoided))
         receipt (assoc tick-stats
-                       :gross-profit (double profit)
-                       :profit (- (+ (double profit) untaxed-income) tax audit-fine)
+                       :revenue revenue
+                       :gross-profit profit
+                       :profit (money/round-cents (- (+ profit untaxed-income) tax audit-fine))
                        :concealment-rate effective-concealment
-                       :concealed-revenue (* (double revenue) effective-concealment)
-                       :taxable-revenue taxable-revenue
+                       :concealed-revenue (money/round-cents (* revenue effective-concealment))
+                       :taxable-revenue (money/round-cents taxable-revenue)
                        :tax-rate effective-tax-rate
                        :tax tax
                        :tax-avoided tax-avoided

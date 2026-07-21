@@ -96,7 +96,7 @@
                        (game_id, player_id, player_name, money, prestige, interior, active_effects)
                        VALUES (?, ?, ?, ?, ?, ?, ?)"
                       game-id player-id player-name
-                      (double (or money (get-in game-data/game-data [:economy :starting-money])))
+                      (long (or money (get-in game-data/game-data [:economy :starting-money])))
                       (long (or prestige 0)) (name interior)
                       (encode (or effects []))]
                      query-options)
@@ -116,7 +116,7 @@
                           (name (get-in dish [:pommes :size]))
                           (name (get-in dish [:pommes :seasoning]))
                           (name (:topping dish))
-                          (double (:price dish))]
+                          (long (:price dish))]
                          query-options))
     game-player-id)))
 
@@ -430,7 +430,7 @@
                             game-player-id (:name dish)
                             (name (get-in dish [:pommes :size]))
                             (name (get-in dish [:pommes :seasoning]))
-                            (name (:topping dish)) (double (:price dish))]
+                            (name (:topping dish)) (long (:price dish))]
                            query-options)))))
 
 (defn action-cost
@@ -471,9 +471,9 @@
                                         query-options)]))]
     (mapv (fn [[research-id item]]
             (let [level (long (get levels research-id 0))
-                  cost (or (research-cost level) 0.0)]
+                  cost (or (research-cost level) 0)]
               (assoc item :level level :cost cost :maximum-level maximum-level
-                     :available? (and running? (< level maximum-level) (>= (double money) cost))
+                     :available? (and running? (< level maximum-level) (>= (long money) cost))
                      :leaders (get leaders research-id))))
           (game-data/research-items))))
 
@@ -495,7 +495,7 @@
         (not= "running" (:status player)) {:error :game-not-running}
         (nil? item) {:error :unknown-research}
         (>= level maximum-level) {:error :maximum-level}
-        (< (double (:money player)) cost) {:error :insufficient-funds :cost cost}
+        (< (long (:money player)) cost) {:error :insufficient-funds :cost cost}
         :else
         (let [updated (jdbc/execute-one! tx
                                          ["UPDATE game_players SET money = money - ? WHERE id = ? AND money >= ?"
@@ -523,9 +523,9 @@
         maximum-level (get-in config [:cost :maximum-level])]
     (mapv (fn [[item-id item]]
             (let [level (long (get levels item-id 0))
-                  cost (or (progression-cost :black-market level) 0.0)]
+                  cost (or (progression-cost :black-market level) 0)]
               (assoc item :level level :cost cost :maximum-level maximum-level
-                     :available? (and running? (< level maximum-level) (>= (double money) cost)))))
+                     :available? (and running? (< level maximum-level) (>= (long money) cost)))))
           (game-data/black-market-items))))
 
 (defn purchase-black-market!
@@ -546,7 +546,7 @@
         (not= "running" (:status player)) {:error :game-not-running}
         (nil? item) {:error :unknown-item}
         (>= level maximum-level) {:error :maximum-level}
-        (< (double (:money player)) cost) {:error :insufficient-funds :cost cost}
+        (< (long (:money player)) cost) {:error :insufficient-funds :cost cost}
         :else
         (let [updated (jdbc/execute-one! tx
                                          ["UPDATE game_players SET money = money - ? WHERE id = ? AND money >= ?"
@@ -592,7 +592,7 @@
               (assoc action
                      :cost cost
                      :uses-left (max 0 (- limit used))
-                     :available? (and available? (>= (double money) cost)))))
+                     :available? (and available? (>= (long money) cost)))))
           (game-data/actions))))
 
 (defn purchase-action!
@@ -633,7 +633,7 @@
               cost (action-cost action tick (:money actor))]
           (cond
             (>= used limit) {:error :action-limit}
-            (< (double (:money actor)) cost) {:error :insufficient-funds :cost cost}
+            (< (long (:money actor)) cost) {:error :insufficient-funds :cost cost}
             :else
             (let [apply-at-tick (inc tick)
                   update-result (jdbc/execute-one! tx
@@ -730,7 +730,7 @@
                         (:id player) (or (:name dish) (str (:id dish)))
                         (name (get-in dish [:pommes :size]))
                         (name (get-in dish [:pommes :seasoning]))
-                        (name (:topping dish)) (double (:price dish))]
+                        (name (:topping dish)) (long (:price dish))]
                        query-options))
   (jdbc/execute-one! connectable
                      ["INSERT INTO game_ticks (game_id, tick, summary) VALUES (?, ?, ?)"

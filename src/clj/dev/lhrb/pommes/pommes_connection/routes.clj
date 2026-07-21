@@ -4,6 +4,7 @@
    [dev.lhrb.pommes.pommes-connection.dish-market :as dish-market]
    [dev.lhrb.pommes.pommes-connection.game-repository :as game-repository]
    [dev.lhrb.pommes.pommes-connection.game-tick :as game-tick]
+   [dev.lhrb.pommes.pommes-connection.money :as money]
    [dev.lhrb.pommes.pommes-connection.views.access :as access-view]
    [dev.lhrb.pommes.pommes-connection.views.actions :as actions-view]
    [dev.lhrb.pommes.pommes-connection.views.black-market :as black-market-view]
@@ -53,7 +54,7 @@
         (into {}
               (keep-indexed
                (fn [index dish]
-                 (let [price (number (:price dish))
+                 (let [price (money/parse-euros (:price dish))
                        errors (cond-> []
                                 (str/blank? (:name dish)) (conj "Name is required.")
                                 (nil? (get-in dish [:pommes :size])) (conj "Choose a valid size.")
@@ -71,7 +72,7 @@
                :dishes (mapv (fn [dish]
                                 (-> dish
                                     (update :name str/trim)
-                                    (assoc :price (number (:price dish)))))
+                                    (assoc :price (money/parse-euros (:price dish)))))
                               dishes)})}))
 
 (defn- overview [datasource game-token game-player-id]

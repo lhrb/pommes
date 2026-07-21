@@ -1,6 +1,7 @@
 (ns dev.lhrb.pommes.pommes-connection.views.layout
   (:require
    [clojure.string :as str]
+   [dev.lhrb.pommes.pommes-connection.money :as money]
    [hiccup2.core :as h]))
 
 (defn panel
@@ -31,8 +32,7 @@
 (defn icon [name alt]
   [:img.icon {:src (str "/assets/icons/" name "_96.png") :alt alt :width 48 :height 48}])
 
-(defn- money [value]
-  (str "€" (str/replace (format "%.2f" (double (or value 0.0))) "." ",")))
+(defn- money [value] (money/format-euros value))
 
 (defn resource-bar [viewer oob?]
   [:section (cond-> {:id "resource-bar" :class "resource-bar" :aria-label "Deine Werte"}

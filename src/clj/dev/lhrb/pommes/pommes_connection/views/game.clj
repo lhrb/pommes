@@ -1,6 +1,7 @@
 (ns dev.lhrb.pommes.pommes-connection.views.game
   (:require
    [clojure.string :as str]
+   [dev.lhrb.pommes.pommes-connection.money :as money]
    [dev.lhrb.pommes.pommes-connection.views.layout :as layout]
    [ring.util.response :as response]))
 
@@ -14,8 +15,7 @@
 
 (def chart-colors ["#f5464c" "#4995f3" "#3ec54b" "#f09548" "#b22741" "#72deeb" "#b4e656" "#3c2f52"])
 
-(defn- money [value]
-  (str "€" (str/replace (format "%.2f" (double (or value 0.0))) "." ",")))
+(defn- money [value] (money/format-euros value))
 
 (defn- quantity [value]
   (format "%d" (long (Math/round (double (or value 0.0))))))

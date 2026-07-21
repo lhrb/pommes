@@ -25,8 +25,8 @@
     :maximum-population-share 0.20}
 
    :economy
-   {:starting-money 1500.0
-    :reference-profit-per-tick {:opening 3.0 :development 6.0 :late 10.0}}
+   {:starting-money 150000
+    :reference-profit-per-tick {:opening 300 :development 600 :late 1000}}
 
    :prestige
    {:market-share-pool 2
@@ -83,20 +83,20 @@
                                :maximum-protection 0.50}}}
 
    :catalog
-   {:sizes {:small {:cost 0.55}
-            :medium {:cost 0.70}
-            :large {:cost 0.85}
-            :extra-large {:cost 1.00}}
-    :seasonings {:salt {:cost 0.03}
-                 :pommesgewuerz {:cost 0.09}}
-    :toppings {:none {:cost 0.00}
-               :ketchup {:cost 0.12}
-               :mayo {:cost 0.16}
-               :ketchup-mayo {:cost 0.25}
-               :special {:cost 0.55}
-               :sate {:cost 0.60}
-               :curry-ketchup {:cost 0.16}
-               :garlic-sauce {:cost 0.20}}
+   {:sizes {:small {:cost 55}
+            :medium {:cost 70}
+            :large {:cost 85}
+            :extra-large {:cost 100}}
+    :seasonings {:salt {:cost 3}
+                 :pommesgewuerz {:cost 9}}
+    :toppings {:none {:cost 0}
+               :ketchup {:cost 12}
+               :mayo {:cost 16}
+               :ketchup-mayo {:cost 25}
+               :special {:cost 55}
+               :sate {:cost 60}
+               :curry-ketchup {:cost 16}
+               :garlic-sauce {:cost 20}}
     :interiors {:classic {}
                 :modern {}
                 :cozy {}
@@ -110,15 +110,15 @@
      :dishes [{:name "Kleine Pommes"
                :pommes {:size :small :seasoning :salt}
                :topping :ketchup-mayo
-               :price 4.0}
+               :price 400}
               {:name "Große Pommes"
                :pommes {:size :large :seasoning :salt}
                :topping :ketchup-mayo
-               :price 6.0}
+               :price 600}
               {:name "Pommes Special"
                :pommes {:size :large :seasoning :salt}
                :topping :special
-               :price 7.0}]}}
+               :price 700}]}}
 
    :actions
    {:send-punks
@@ -180,15 +180,15 @@
                {:type :demographic-attraction :demographic :families :modifier 0.15}
                {:type :average-order-size :modifier 0.10}
                {:type :price-tolerance :modifier 0.10}]}
-    :cost {:minimum 50.0}}
+    :cost {:minimum 5000}}
 
    :market
-   {:price-anchors {:students 4.50
-                    :families 5.50
-                    :yuppies 6.00
-                    :office-workers 5.25
-                    :retirees 4.75
-                    :foodies 7.50}}
+   {:price-anchors {:students 450
+                    :families 550
+                    :yuppies 600
+                    :office-workers 525
+                    :retirees 475
+                    :foodies 750}}
 
    :city
    {:population-anchors [[0 15000]
@@ -216,7 +216,7 @@
        :seasoning {:salt 0.8 :pommesgewuerz 0.7}
        :topping {:none 0.3 :ketchup 1.0 :mayo 0.7 :ketchup-mayo 0.9
                  :special 0.4 :sate 0.5 :curry-ketchup 0.8 :garlic-sauce 0.6}
-       :price {:model :cheap :max 5.00 :anchor 4.50 :relative-price-strength 0.25}
+       :price {:model :cheap :max 500 :anchor 450 :relative-price-strength 0.25}
        :interior {:classic 0.5 :modern 0.8 :cozy 0.6 :street-food 1.0 :premium 0.4}}}
 
      {:id :families
@@ -231,7 +231,7 @@
        :seasoning {:salt 1.0 :pommesgewuerz 0.6}
        :topping {:none 0.5 :ketchup 1.0 :mayo 0.8 :ketchup-mayo 0.9
                  :special 0.5 :sate 0.2 :curry-ketchup 0.6 :garlic-sauce 0.5}
-       :price {:model :value :ideal 5.50 :tolerance 2.25 :anchor 5.50 :relative-price-strength 0.10}
+       :price {:model :value :ideal 550 :tolerance 225 :anchor 550 :relative-price-strength 0.10}
        :interior {:classic 1.0 :modern 0.8 :cozy 0.9 :street-food 0.6 :premium 0.5}}}
 
      {:id :yuppies
@@ -246,7 +246,7 @@
        :seasoning {:salt 0.4 :pommesgewuerz 1.0}
        :topping {:none 0.2 :ketchup 0.1 :mayo 0.2 :ketchup-mayo 0.1
                  :special 1.0 :sate 0.8 :curry-ketchup 0.7 :garlic-sauce 0.7}
-       :price {:model :status :ideal 9.00 :tolerance 3.00 :anchor 6.00 :status-strength 0.40}
+       :price {:model :status :ideal 900 :tolerance 300 :anchor 600 :status-strength 0.40}
        :interior {:classic 0.2 :modern 1.0 :cozy 0.6 :street-food 0.8 :premium 1.0}}}
 
      {:id :office-workers
@@ -261,7 +261,7 @@
        :seasoning {:salt 0.8 :pommesgewuerz 0.9}
        :topping {:none 0.2 :ketchup 0.8 :mayo 0.5 :ketchup-mayo 0.6
                  :special 0.5 :sate 0.5 :curry-ketchup 1.0 :garlic-sauce 0.7}
-       :price {:model :value :ideal 5.25 :tolerance 1.75 :anchor 5.25
+       :price {:model :value :ideal 525 :tolerance 175 :anchor 525
                :relative-price-strength 0.15}
        :interior {:classic 0.5 :modern 1.0 :cozy 0.6 :street-food 0.9 :premium 0.5}}}
 
@@ -277,7 +277,7 @@
        :seasoning {:salt 1.0 :pommesgewuerz 0.4}
        :topping {:none 0.8 :ketchup 0.8 :mayo 0.9 :ketchup-mayo 0.7
                  :special 0.3 :sate 0.1 :curry-ketchup 0.3 :garlic-sauce 0.4}
-       :price {:model :cheap :max 5.50 :anchor 4.75 :relative-price-strength 0.15}
+       :price {:model :cheap :max 550 :anchor 475 :relative-price-strength 0.15}
        :interior {:classic 1.0 :modern 0.4 :cozy 1.0 :street-food 0.3 :premium 0.5}}}
 
      {:id :foodies
@@ -292,7 +292,7 @@
        :seasoning {:salt 0.3 :pommesgewuerz 1.0}
        :topping {:none 0.1 :ketchup 0.2 :mayo 0.3 :ketchup-mayo 0.2
                  :special 0.8 :sate 0.9 :curry-ketchup 0.7 :garlic-sauce 1.0}
-       :price {:model :status :ideal 7.50 :tolerance 2.50 :anchor 7.50
+       :price {:model :status :ideal 750 :tolerance 250 :anchor 750
                :status-strength 0.30}
        :interior {:classic 0.3 :modern 0.8 :cozy 0.8 :street-food 0.7 :premium 1.0}}}]}})
 

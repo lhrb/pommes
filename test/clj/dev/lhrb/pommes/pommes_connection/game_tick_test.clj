@@ -43,7 +43,7 @@
                           :size {:small 1.0}
                           :seasoning {:salt 1.0}
                           :topping {:ketchup 1.0}
-                          :price {:model :cheap :max 8.0}
+                          :price {:model :cheap :max 800}
                           :interior {:classic 1.0 :cozy 1.0}}}]}}))
 
 (deftest global-attraction-affects-every-demographic
@@ -70,12 +70,12 @@
         [_ recovered-receipt] (black-market/settle-player rules 13 after-penalty {:revenue 100.0 :profit 60.0})]
     (is (< 0.09 (:concealment-rate receipt) 0.10))
     (is (< (:tax receipt) 19.0))
-    (is (= (- 60.0 (:tax receipt)) (:profit receipt)))
+    (is (= (- 60 (:tax receipt)) (:profit receipt)))
     (is (pos? (get-in after-first [:game-stats :total-tax-avoided])))
     (is (:audited? audit-receipt))
     (is (= 1 (get-in after-audit [:game-stats :audit-count])))
     (is (= 2 (:audit-penalty-ticks audit-receipt)))
-    (is (= 38.0 (:tax audit-receipt)))
+    (is (= 38 (:tax audit-receipt)))
     (is (= 0.0 (:suspicion audit-receipt)))
     (is (= 0 (get-in after-penalty [:game-stats :audit-penalty-ticks])))
     (is (pos? (:tax-avoided recovered-receipt)))))
@@ -95,11 +95,11 @@
     (is (< 0.05 (:audit-chance large-revenue) 0.55))))
 
 (deftest action-costs-scale-with-game-phase
-  (is (= [600.0 480.0 420.0 600.0 480.0 480.0]
+  (is (= [60000 48000 42000 60000 48000 48000]
          (mapv #(game-repository/action-cost (game-data/action %) 150000 108000000.0)
                [:send-punks :rocker-meeting :influencer-visit
                 :parking-chaos :review-bomb :neighborhood-festival])))
-  (is (= 180.0
+  (is (= 18000
          (game-repository/action-cost (game-data/action :send-punks) 0.0 0.0))))
 
 (deftest regulars-are-bounded-and-convert-deterministically
@@ -134,7 +134,7 @@
                                               :player-name "Ada"))
             _ (jdbc/execute-one! datasource ["UPDATE games SET status = 'running' WHERE id = ?" game-id]
                                  query-options)
-            _ (jdbc/execute-one! datasource ["UPDATE game_players SET money = 3000 WHERE id = ?" game-player-id]
+            _ (jdbc/execute-one! datasource ["UPDATE game_players SET money = 300000 WHERE id = ?" game-player-id]
                                  query-options)
             purchase (game-repository/purchase-black-market!
                       datasource game-player-id :creative-bookkeeping)
@@ -147,9 +147,9 @@
             page-response (handler {:request-method :get
                                     :uri (str "/games/" game-token "/black-market")
                                     :session {:game-token game-token :game-player-id game-player-id}})]
-        (is (= {:ok true :cost 1800.0 :level 1} purchase))
+        (is (= {:ok true :cost 180000 :level 1} purchase))
         (is (= {:creative-bookkeeping 1} (get-in overview [:viewer :black-market])))
-        (is (= 1200.0 (get-in overview [:viewer :money])))
+        (is (= 120000 (get-in overview [:viewer :money])))
         (is (= 200 (:status page-response)))
         (is (re-find #"Schwarzmarkt" (:body page-response)))
         (is (re-find #"Kreative Buchführung" (:body page-response)))
@@ -233,7 +233,7 @@
                 :dishes [{:id :classic
                           :pommes {:size :small :seasoning :salt}
                           :topping :ketchup
-                          :price 4.0}]}
+                          :price 400}]}
         result (simulation/simulate-demographic (:rules simulation-config)
                                                 (:catalog simulation-config)
                                                 (:market simulation-config)
@@ -371,7 +371,7 @@
                               :dishes [{:name "Classic"
                                         :pommes {:size :small :seasoning :salt}
                                         :topping :ketchup
-                                        :price 4.0}]})]
+                                        :price 400}]})]
         (jdbc/execute-one! datasource
                            ["UPDATE games SET status = 'running', next_tick_at = ? WHERE id = ?"
                             (+ (System/currentTimeMillis) 30000) game-id]
@@ -382,19 +382,19 @@
           :dishes [{:name "Cozy special"
                     :pommes {:size :small :seasoning :salt}
                     :topping :ketchup
-                    :price 5.0}]})
+                    :price 500}]})
         (game-repository/save-setup!
          datasource game-player-id
          {:interior :cozy
           :dishes [{:name "Cozy special"
                     :pommes {:size :small :seasoning :salt}
                     :topping :ketchup
-                    :price 5.5}]})
+                    :price 550}]})
         (is (= "cozy"
                (:interior (jdbc/execute-one! datasource
                                               ["SELECT interior FROM game_players WHERE id = ?" game-player-id]
                                               query-options))))
-        (is (= 5.5
+        (is (= 550
                (:price (jdbc/execute-one! datasource
                                            ["SELECT price FROM player_dishes WHERE game_player_id = ?" game-player-id]
                                            query-options))))
@@ -477,7 +477,7 @@
           (is (= 15000 (get-in overview [:city :population])))
           (is (= "cozy" (:interior player)))
           (is (= "Cozy special" (:name dish)))
-          (is (= 5.5 (:price dish)))
+          (is (= 550 (:price dish)))
           (is (nil? scheduled-actions-table))
           (is (= 1 (:tick history)))
           (is (number? (get-in overview [:game :next-tick-at])))
@@ -564,7 +564,7 @@
                                    WHERE id = ?"
                                   (+ (System/currentTimeMillis) 30000) ada game-id]
                                  query-options)
-            _ (jdbc/execute-one! datasource ["UPDATE game_players SET money = 10000 WHERE id = ?" ada]
+            _ (jdbc/execute-one! datasource ["UPDATE game_players SET money = 1000000 WHERE id = ?" ada]
                                  query-options)
             invalid-punks (game-repository/purchase-action! datasource ada :send-punks ada)
             invalid-rocker (game-repository/purchase-action! datasource ada :rocker-meeting ada)
@@ -573,14 +573,14 @@
             over-limit (game-repository/purchase-action! datasource ada :review-bomb bea)]
         (is (= :invalid-target (:error invalid-punks)))
         (is (= :invalid-target (:error invalid-rocker)))
-        (is (= {:ok true :cost 180.0 :apply-at-tick 1} purchase))
-        (is (= {:ok true :cost 180.0 :apply-at-tick 1} repeat-purchase))
+        (is (= {:ok true :cost 18000 :apply-at-tick 1} purchase))
+        (is (= {:ok true :cost 18000 :apply-at-tick 1} repeat-purchase))
         (is (= :action-limit (:error over-limit)))
-        (is (= 9640.0 (:money (jdbc/execute-one! datasource
+        (is (= 964000 (:money (jdbc/execute-one! datasource
                                                 ["SELECT money FROM game_players WHERE id = ?" ada]
                                                 query-options))))
         (is (= {:actor-game-player-id ada :target-game-player-id bea
-                :action-id "send-punks" :cost 180.0 :purchase-tick 0 :apply-at-tick 1}
+                :action-id "send-punks" :cost 18000 :purchase-tick 0 :apply-at-tick 1}
                (select-keys (jdbc/execute-one! datasource
                                                 ["SELECT actor_game_player_id, target_game_player_id, action_id,
                                                          cost, purchase_tick, apply_at_tick

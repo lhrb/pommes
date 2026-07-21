@@ -1,7 +1,8 @@
 (ns dev.lhrb.pommes.pommes-connection.views.black-market
   (:require [clojure.string :as str] [dev.lhrb.pommes.pommes-connection.black-market :as black-market]
+            [dev.lhrb.pommes.pommes-connection.money :as money]
             [dev.lhrb.pommes.pommes-connection.game-data :as game-data] [dev.lhrb.pommes.pommes-connection.views.layout :as layout] [ring.util.response :as response]))
-(defn- money [v] (str "€" (str/replace (format "%.2f" (double (or v 0))) "." ",")))
+(defn- money [v] (money/format-euros v))
 (defn- percent [v] (format "%.1f%%" (* 100.0 (double (or v 0)))))
 (def icons {:creative-bookkeeping "bm_bookkeeping" :cash-only-register "bm_cash" :uncle-rudis-accounting "bm_uncle"})
 (defn- effect-value [item]

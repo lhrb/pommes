@@ -1,9 +1,10 @@
 (ns dev.lhrb.pommes.pommes-connection.views.actions
   (:require [clojure.string :as str]
+            [dev.lhrb.pommes.pommes-connection.money :as money]
             [dev.lhrb.pommes.pommes-connection.views.layout :as layout]
             [ring.util.response :as response]))
 
-(defn- money [value] (str "€" (str/replace (format "%.2f" (double (or value 0.0))) "." ",")))
+(defn- money [value] (money/format-euros value))
 (def action-icons {:send-punks "action_punk" :rocker-meeting "action_rocker" :influencer-visit "action_influenca"
                    :parking-chaos "action_park_chaos" :review-bomb "action_review_bomb" :neighborhood-festival "action_festival"})
 (def action-stories
