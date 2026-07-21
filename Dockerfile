@@ -1,19 +1,25 @@
-# syntax = docker/dockerfile:1.7
-FROM clojure:openjdk-17 AS build
+# syntax=docker/dockerfile:1.7
 
-WORKDIR /
-COPY . /
+FROM clojure:temurin-21-tools-deps AS build
 
-RUN clj -Sforce -T:build all
+WORKDIR /app
+COPY . .
 
-FROM azul/zulu-openjdk-alpine:17
+RUN clojure -Sforce -T:build all
 
-RUN addgroup -S -g 10001 pommes \
+
+FROM eclipse-temurin:21-jre-alpine
+
+RUN apk add --no-cache wget \
+ && addgroup -S -g 10001 pommes \
  && adduser -S -D -H -u 10001 -G pommes pommes
 
 WORKDIR /pommes-connection
 
-COPY --from=build --chown=pommes:pommes /target/pommes-connection-standalone.jar ./pommes-connection-standalone.jar
+COPY --from=build \
+  --chown=pommes:pommes \
+  /app/target/pommes-connection-standalone.jar \
+  ./pommes-connection-standalone.jar
 
 USER pommes
 
