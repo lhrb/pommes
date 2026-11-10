@@ -59,7 +59,7 @@ Even the fryer has standards:
 At the time, I wanted to understand the tradeoffs of implementing a project with a coding agent.
 Some observations: I could discuss the game mechanics at a higher level.
 There were quirks in the UI and logic that needed attention.
-Being unfamiliar with the code felt weird, leaving me disconnected from the implementation.
+Being unfamiliar with the code felt weird at the time, leaving me disconnected from the implementation.
 
 ## Under the hood
 
