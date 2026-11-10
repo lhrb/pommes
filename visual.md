@@ -36,6 +36,14 @@ Every page lives inside one persistent mobile game interface:
 #3ec54b
 #b4e656 
 
+## Icon constraints
+
+Use 24×24 px neo-retro source icons with hard pixel edges.
+Use the fixed [Shiny 16 palette](https://lospec.com/palette-list/shiny-16) above, with at most six colors per icon, including outlines.
+Avoid antialiasing, gradients, and partial transparency.
+Use clear silhouettes, one shadow level, one highlight level, and consistent upper-left lighting.
+Keep the technical limits strict; interpret shape and character freely.
+
 ## assets for views
 
 - we have all icons in sizes 48x48 and 96x96 postfix _48.png _96.png

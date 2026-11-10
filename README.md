@@ -1,109 +1,90 @@
-# pommes-connection
+# Pommes Connection
 
-Start a [REPL](#repls) in your editor or terminal of choice.
+A small multiplayer browser game about German **Pommesbuden**: chip shops with competitors, regulars, and questionable bookkeeping.
 
-Start the server with:
+Three players share a city for seven real-time days. The market advances every 30 seconds, even while players are offline.
+The shop with the most **Prestige**, not the most money, wins *Die goldene Pommes*.
+
+![Shop dashboard with finances, customer groups, and competitor ratings](docs/images/bude-overview.png)
+
+The shop dashboard: finances, customers, and the neighborhood competition.
+
+## The game
+
+- **Find a market:** configure three dishes, prices, portions, toppings, seasoning, and the shop interior.
+- **Read the neighborhood:** six customer groups have different preferences; population, demand, and market memory evolve.
+- **Build a reputation:** win market share, attract regulars, and invest in research.
+- **Interfere:** attract customers or disrupt competitors through two action slots, each with a twelve-hour cooldown.
+- **Keep creative accounts:** black-market upgrades offer untaxed income, with suspicion, audits, and Prestige penalties attached.
+
+Create a game, invite two competitors, and start the week.
+The German-language, mobile-first interface pairs pixel art with deadpan neighborhood bureaucracy.
+Even the fryer has standards:
+
+> Die Fritteuse hält die Temperatur. Zumindest, wenn man sie nicht dabei beobachtet.
+
+## Screenshots
+
+<details>
+<summary>Explore the menu, market, actions, research, and black market</summary>
+
+**Menu configuration** — Adjust dishes and prices, then preview their effect on the market.
+
+![Menu editor with portion sizes, toppings, prices, and a market forecast](docs/images/speisekarte.png)
+
+**Market shares** — See which shops attract each of the six customer groups.
+
+![Market-share charts for the six customer groups](docs/images/marktanteile.png)
+
+**City statistics** — Compare demographics and track competitors’ market shares across the game.
+
+![City demographics and cumulative market shares by shop](docs/images/stats.png)
+
+**Actions** — Choose a target for an influencer visit, arriving punks, or a new parking arrangement.
+
+![Actions for attracting customers and disrupting competing shops](docs/images/aktionen.png)
+
+**Research** — Improve potatoes, equipment, and recipes; keep an eye on regular customers.
+
+![Research upgrades and regular-customer counts](docs/images/forschung.png)
+
+**Black market** — Invest in questionable bookkeeping while monitoring suspicion and audit risk.
+
+![Black-market upgrades with tax, suspicion, and audit indicators](docs/images/schwarzmarkt.png)
+
+</details>
+
+## How it was made
+
+At the time, I wanted to understand the tradeoffs of implementing a project with a coding agent.
+Some observations: I could discuss the game mechanics at a higher level.
+There were quirks in the UI and logic that needed attention.
+Being unfamiliar with the code felt weird, leaving me disconnected from the implementation.
+
+## Under the hood
+
+**Clojure · Kit/Integrant · Ring/Reitit · Hiccup · HTMX/Alpine.js · next.jdbc/SQLite · Migratus**
+
+Pure simulation functions separate market rules from HTTP and persistence.
+Seeded scenarios support repeatable balancing without a server or database.
+Scheduled ticks persist transactionally; tests cover simulation behavior, game lifecycle, and HTTP requests.
+Docker Compose, Caddy, and GitHub Actions provide the single-server deployment path.
+
+## Run locally
+
+Requires Java 21 and the Clojure CLI.
+
+```sh
+mkdir -p data
+clj -M:dev
+```
+
+Start the server from the REPL:
 
 ```clojure
 (go)
 ```
 
-The health page is available at http://localhost:3000/health. It reports server
-and database readiness.
+Open [localhost:3333](http://localhost:3333). Run tests with `clj -M:test`; reload changes with `(reset)`.
 
-By default, SQLite stores its database at `data/pommes-connection.db`. Set
-`DATABASE_URL` to use another JDBC URL.
-
-## Production deployment
-
-Production runs on a single Ubuntu 24.04 server using Docker Compose and
-Caddy. Run the bootstrap once from a checked-out repository as the SSH user
-that GitHub Actions will use:
-
-```sh
-sudo ./infra/setup-server.sh
-```
-
-Log in again, edit `/opt/pommes/.env`, and set `DOMAIN` and `ACME_EMAIL`. Point
-the domain's A/AAAA records at the server before the first deploy. The script
-generates and stores the session key, configures UFW for SSH/HTTP/HTTPS, and
-enables daily local SQLite backups under `/opt/pommes/backups`.
-
-The deploy workflow runs tests, builds an image for each `main` commit, copies
-it to the server, and activates it with `/opt/pommes/deploy.sh`. Configure
-these GitHub Actions secrets: `DEPLOY_HOST`, `DEPLOY_PORT`, `DEPLOY_USER`, and
-`DEPLOY_SSH_KEY`. `DEPLOY_USER` must be the user that ran the bootstrap script.
-
-System configuration is available under `resources/system.edn`.
-
-## Game data
-
-All editable game parameters live in
-`src/clj/dev/lhrb/pommes/pommes_connection/game_data.clj`. Its `game-data` map
-contains the catalog, costs, demographics, rules, setup limit, and starter
-setup. Reload the app after editing it; existing games use the updated values
-on their next page load and tick.
-
-To reload changes:
-
-```clojure
-(reset)
-```
-
-## Market balancing in the REPL
-
-The pure market analysis helpers provide repeatable scenarios without starting
-the web app or touching the database.
-
-```clojure
-(require '[dev.lhrb.pommes.pommes-connection.market-analysis :as market-analysis])
-
-;; Per-player and min/max/average profit for every scenario at ticks 1 and 10.
-(market-analysis/scenario-report)
-
-;; Explore one scenario and inspect its allocations and utility components.
-(market-analysis/run-scenario :price-pressure 10)
-```
-
-The named scenarios are available in `market-analysis/scenarios`. Tick 1 shows
-the immediate result; tick 10 shows the same setup after market memory adapts.
-
-## REPLs
-
-### Cursive
-
-Configure a [REPL following the Cursive documentation](https://cursive-ide.com/userguide/repl.html). Using the default "Run with IntelliJ project classpath" option will let you select an alias from the ["Clojure deps" aliases selection](https://cursive-ide.com/userguide/deps.html#refreshing-deps-dependencies).
-
-### CIDER
-
-Use the `cider` alias for CIDER nREPL support (run `clj -M:dev:cider`). See the [CIDER docs](https://docs.cider.mx/cider/basics/up_and_running.html) for more help.
-
-Note that this alias runs nREPL during development. To run nREPL in production (typically when the system starts), use the kit-nrepl library through the +nrepl profile as described in [the documentation](https://kit-clj.github.io/docs/profiles.html#profiles).
-
-### Command Line
-
-Run `clj -M:dev:nrepl` or `make repl`.
-
-Note that, just like with [CIDER](#cider), this alias runs nREPL during development. To run nREPL in production (typically when the system starts), use the kit-nrepl library through the +nrepl profile as described in [the documentation](https://kit-clj.github.io/docs/profiles.html#profiles).
-
-
-24×24 px neo-retro icons. Fixed 16-color master palette; maximum 6 colors per icon including outline. Hard pixel edges, no antialiasing, gradients or partial transparency. Use clear silhouettes, one shadow level and one highlight level. Maintain consistent light from the upper left. Strict technical limits; free interpretation of shape and character.
-
-https://lospec.com/palette-list/shiny-16
-
-#1f1723
-#3c2f52
-#8c7f90
-#bcb0b3
-#e2e2e2
-#d86830
-#f09548
-#efd081
-#b22741
-#f5464c
-#f79c88
-#4656a5
-#4995f3
-#72deeb
-#3ec54b
-#b4e656 
+[Development and deployment](docs/development.md) · [Winning](goal.md) · [Balancing](balancing.md) · [Narrative](narrative.md) · [Visual direction](visual.md)
